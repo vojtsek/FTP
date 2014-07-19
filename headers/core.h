@@ -5,7 +5,8 @@
 
 char readWord(int, char *);
 int readCmd(int, struct cmd *);
-int executeCmd(struct cmd *, short *, int);
+int executeCmd(struct cmd *, short *, int, struct state *, struct config *configuration);
 void *controlRoutine(void *);
+void *dataRoutine(void *);
 
 #endif

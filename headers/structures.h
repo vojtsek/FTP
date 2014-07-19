@@ -8,13 +8,14 @@ struct config {
 	char *listen_on, *root_dir, *user_db;
 };
 
-
-struct response {
-	int fst, snd, thd;
-	char *msg;
+struct state {
+	short logged;
+	char *user;
+	char *path;
+	size_t data_port;
 };
 
-typedef void (*cmd_fnc) (char **, short *, int);
+typedef void (*cmd_fnc) (char **, short *, int, struct state*, struct config *);
 enum CMD_NAME {LOGIN};
 
 struct cmd {

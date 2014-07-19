@@ -13,5 +13,8 @@ int main(int argc, char **argv) {
 
 	// create a socket and star listening
 	startServer(&configuration);
+	free(configuration.listen_on);
+	free(configuration.root_dir);
+	free(configuration.user_db);
 	return (0);
 }

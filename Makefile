@@ -26,7 +26,7 @@ $(BIN_DIR)common.o: $(SRC_DIR)common.c $(HEADER_DIR)structures.h $(HEADER_DIR)er
 $(BIN_DIR)networking.o: $(SRC_DIR)networking.c $(HEADER_DIR)errors.h $(HEADER_DIR)conf.h $(HEADER_DIR)structures.h $(HEADER_DIR)core.h
 	$(call make_obj,networking)
 
-$(BIN_DIR)commands.o: $(SRC_DIR)commands.c $(HEADER_DIR)structures.h $(HEADER_DIR)conf.h $(HEADER_DIR)core.h
+$(BIN_DIR)commands.o: $(SRC_DIR)commands.c $(HEADER_DIR)structures.h $(HEADER_DIR)conf.h $(HEADER_DIR)core.h $(HEADER_DIR)common.h
 	$(call make_obj,commands)
 
 $(BIN_DIR)core.o: $(SRC_DIR)core.c $(HEADER_DIR)errors.h $(HEADER_DIR)conf.h $(HEADER_DIR)commands.h

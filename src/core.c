@@ -44,12 +44,14 @@ int readCmd(int sock, struct cmd *command) {
 	return (i);
 }
 
-int executeCmd(struct cmd *command, short *abor, int fd) {
+int executeCmd(struct cmd *command, short *abor, int fd, struct state *cstate,struct config *configuration) {
 	initCmd(command, &user_cmd);
 	if (command->func)
-		command->func(command->params, abor, fd);
-	else
+		command->func(command->params, abor, fd, cstate, configuration);
+	else {
 		printf("%s\n", "Unknown command!");
+		respond(fd, 5, 0, 2, "Command not implemented.\n");
+	}
 
 	return (0);
 }
@@ -58,15 +60,10 @@ void *controlRoutine(void *arg) {
 	struct thread_info *info = (struct thread_info *) arg;
 	int fd = info->fd;
 	struct cmd command;
+	struct state cstate = {0, NULL, info->configuration->root_dir, info->configuration->data_port};
 	short abor = 0;
-	char *path = (char *) malloc(255);
-	strcpy(path, "/Ahoj/cau/jde_to");
-	change_dir(path, "dobre");
-	printf("%s\n", path);
-	change_dir(path, "..");
-	printf("%s\n", path);
 	while (readCmd(fd, &command) != -1) {
-		executeCmd(&command, &abor, fd);
+		executeCmd(&command, &abor, fd, &cstate, info->configuration);
 		if (abor) break;
 	}
 	return (arg);

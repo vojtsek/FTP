@@ -5,6 +5,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 void readConfiguration(struct config *configuration, int argc, char **argv) {
 	size_t opt;
@@ -57,25 +61,90 @@ short isWhite(char c) {
 	return ((c == ' ') || (c == '\n') || (c == '\r') || (c == '\t'));
 }
 
-int change_dir(char *path, char *dir) {
-	char *last_slash;
-	// result = (char *) malloc( strlen(path) * sizeof (path));
+char *changeDir(char *path, char *dir) {
+	char *last_slash, *old_path = path;
 	// step up one directory
 	if (strcmp(dir, "..") == 0){
 		if (((last_slash = strrchr(path, '/')) == path) || (last_slash == NULL)) { // root dir or invalid path
-			return (-1);
+			return path;
 		}
-		if((path = realloc(path, (last_slash - path) + 1)) == NULL)
-			return (-1);
+		if((path = realloc(path, (last_slash - path) + 1)) == NULL){
+			free(old_path);
+			return NULL;
+		}
 		(*last_slash) = 0;
-		//*path = result;
-		return (0);
+		return path;
 	}
-	if ((path = realloc(path, strlen(path) + strlen(dir) + 2)) == NULL)
-		return (-1);
-	path[strlen(path)] = '/';
-	path[strlen(path)  + 1] = 0;
+	size_t path_l = strlen(path);
+	if ((path = realloc(path, path_l + strlen(dir) + 2)) == NULL){
+		free(old_path);
+		return NULL;
+	}
+	path[path_l] = '/';
+	path[path_l + 1] = 0;
 	strcat(path, dir);
 
+	return path;
+}
+
+short isDir(char *path, struct config *configuration){
+	char *dir = (char *) malloc(256 * sizeof (char));
+	strcpy(dir, configuration->root_dir);
+	strcat(dir, path);
+	if(opendir(dir) == NULL){
+		free(dir);
+		return (0);
+	}
+	free(dir);
+	return (1);
+}
+
+char *readUntil(int fd, char sep){
+	char *buf = (char *) malloc (256 * sizeof (char));
+	char *res = buf;
+	char c;
+	while((read(fd, &c, 1) > 0) && (c != sep)){
+		(*buf++) = c;
+	}
+	if(c == sep) return (res);
+	else {
+		free(res);
+		return (NULL);
+	}
+}
+
+int lookupUser(char *path, char *username, char *passwd){
+	char *user, *pswd;
+	user = pswd = NULL;
+	int fd, res = 1;
+	if((fd = open(path, O_RDONLY)) == -1 )
+		return (-1);
+	while((user = readUntil(fd, ':')) != NULL){
+		pswd = readUntil(fd, '\n');
+		if(pswd == NULL){
+			res = 1;
+			break;
+		}
+		if(strcmp(username, user) == 0){
+			res = 0;
+			break;
+		}
+		free(pswd);
+		free(user);
+		pswd = user = NULL;
+	}
+	if (pswd == NULL){
+		return (1);
+	}
+	if(passwd == NULL) return (res);
+	strcpy(passwd, pswd);
+	free(pswd);
+	free(user);
+	return (res);
+}
+
+int getFullPath(char *fpath, struct state *cstate, struct config *configuration, char *dirname){
+	// dirname begins with slash - its dirname
+	// otherwise its concatenatio of the three
 	return (0);
 }
