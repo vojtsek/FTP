@@ -3,6 +3,7 @@
 #include "../headers/structures.h"
 #include "../headers/core.h"
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <strings.h> // bzero
 #include <unistd.h> // fork
 #include <pthread.h>
@@ -72,7 +73,6 @@ int runInstance(struct config *configuration,
 	struct sockaddr *client_addr, int sock) {
 	char numeric_addr[INET6_ADDRSTRLEN];
 	char cmd[256];
-	// pthread_attr_t attr;
 	pthread_t control_thread;
 	bzero(numeric_addr, INET6_ADDRSTRLEN);
 	bzero(cmd, 256);
@@ -82,9 +82,11 @@ int runInstance(struct config *configuration,
 		numeric_addr, sizeof (numeric_addr));
 	printf("Recognized peer with address '%s' on port %d.\n",
 		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
-	struct thread_info info;
+	respond(sock, 2, 2, 0, "Service ready");
+	struct control_info info;
 	info.fd = sock;
 	info.configuration = configuration;
+	info.client_addr = client_addr;
 	if ((pthread_create(&control_thread, NULL,
 		&controlRoutine, &info)) != 0)
 		err(1, "Error while creating thread.");

@@ -75,6 +75,17 @@ char *changeDir(char *path, char *dir) {
 		(*last_slash) = 0;
 		return path;
 	}
+	if(dir[0] == '/'){
+		if((path = realloc(path, strlen(dir) + 1)) == NULL){
+			free(old_path);
+			return NULL;
+		}
+		if (strcpy(path, dir) == NULL){
+			free(old_path);
+			return NULL;
+		}
+		return path;
+	}
 	size_t path_l = strlen(path);
 	if ((path = realloc(path, path_l + strlen(dir) + 2)) == NULL){
 		free(old_path);
@@ -87,16 +98,11 @@ char *changeDir(char *path, char *dir) {
 	return path;
 }
 
-short isDir(char *path, struct config *configuration){
-	char *dir = (char *) malloc(256 * sizeof (char));
-	strcpy(dir, configuration->root_dir);
-	strcat(dir, path);
+short isDir(char *dir){
 	if(opendir(dir) == NULL){
-		free(dir);
-		return (0);
+		return (-1);
 	}
-	free(dir);
-	return (1);
+	return (0);
 }
 
 char *readUntil(int fd, char sep){
@@ -144,7 +150,19 @@ int lookupUser(char *path, char *username, char *passwd){
 }
 
 int getFullPath(char *fpath, struct state *cstate, struct config *configuration, char *dirname){
-	// dirname begins with slash - its dirname
-	// otherwise its concatenatio of the three
+	// if the directory is determined by absolute path
+	if(dirname[0] == '/'){
+		if (strcpy(fpath, configuration->root_dir) == NULL)
+			return (-1);
+		if (strcat(fpath, dirname) == NULL)
+			return (-1);
+		return (0);
+	}
+	if (strcpy(fpath, configuration->root_dir) == NULL)
+		return (-1);
+	if (strcat(fpath, cstate->path) == NULL)
+		return (-1);
+	if ((fpath = changeDir(fpath, dirname)) == NULL)
+		return (-1);
 	return (0);
 }

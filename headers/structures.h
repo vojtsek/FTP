@@ -2,6 +2,7 @@
 #define	STRUCTURES_H
 
 #include <stddef.h>
+#include <arpa/inet.h>
 
 struct config {
 	size_t ctrl_port, data_port, max_conns;
@@ -12,7 +13,8 @@ struct state {
 	short logged;
 	char *user;
 	char *path;
-	size_t data_port;
+	size_t data_port, transfer_count;
+	struct sockaddr *client_addr;
 };
 
 typedef void (*cmd_fnc) (char **, short *, int, struct state*, struct config *);
@@ -24,9 +26,20 @@ struct cmd {
 	cmd_fnc func;
 };
 
-struct thread_info {
+struct control_info {
 	int fd;
 	struct config *configuration;
+	struct sockaddr *client_addr;
+};
+
+struct data_info {
+	size_t data_port;
+	char *control_sock;
+	char *user;
+	char *path;
+	char *fn;
+	struct config *configuration;
+	struct sockaddr *client_addr;
 };
 
 struct cmd_function {

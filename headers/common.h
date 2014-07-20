@@ -15,7 +15,7 @@ short isWhite(char);
 // change the path to point to a given directory
 char *changeDir(char *, char *);
 
-short isDir(char *, struct config *);
+short isDir(char *);
 
 int lookupUser(char *, char *, char *);
 
