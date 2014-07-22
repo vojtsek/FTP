@@ -19,6 +19,8 @@ void type(char **, short *, int, struct state *, struct config *);
 void feat(char **, short *, int, struct state *, struct config *);
 void noop(char **, short *, int, struct state *, struct config *);
 void port(char **, short *, int, struct state *, struct config *);
+void list(char **, short *, int, struct state *, struct config *);
+void pasv(char **, short *, int, struct state *, struct config *);
 void quit(char **, short *, int, struct state *, struct config *);
 
 
@@ -35,7 +37,9 @@ static struct cmd_function type_cmd = {&syst_cmd, type, "TYPE"};
 static struct cmd_function feat_cmd = {&type_cmd, feat, "FEAT"};
 static struct cmd_function noop_cmd = {&feat_cmd, noop, "NOOP"};
 static struct cmd_function port_cmd = {&noop_cmd, port, "PORT"};
-static struct cmd_function user_cmd = {&port_cmd, user, "USER"};
+static struct cmd_function list_cmd = {&port_cmd, list, "LIST"};
+static struct cmd_function pasv_cmd = {&list_cmd, pasv, "PASV"};
+static struct cmd_function user_cmd = {&pasv_cmd, user, "USER"};
 
 
 #endif

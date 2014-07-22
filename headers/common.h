@@ -22,4 +22,6 @@ int lookupUser(char *, char *, char *);
 char *readUntil(int, char);
 
 int getFullPath(char *, struct state *, struct config *, char *);
+
+int getHostIp(char *, struct in_addr *);
 #endif

@@ -9,6 +9,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <sys/un.h>
+#include <strings.h> // bzero
+#include <errno.h>
 
 void readConfiguration(struct config *configuration, int argc, char **argv) {
 	size_t opt;
@@ -165,4 +170,21 @@ int getFullPath(char *fpath, struct state *cstate, struct config *configuration,
 	if ((fpath = changeDir(fpath, dirname)) == NULL)
 		return (-1);
 	return (0);
+}
+
+int getHostIp(char *ip, struct in_addr *addr){
+	size_t sock;
+	struct sockaddr_in in;
+	struct sockaddr_in loc_info;
+	int sz = sizeof (loc_info);
+	in.sin_family = AF_INET;
+	in.sin_addr.s_addr = inet_addr("78.128.193.44");
+	in.sin_port = htons(21);
+	if ((sock = socket(AF_INET, SOCK_STREAM, 6)) == -1)
+		err(1, "Problem occured while creating the socket.");
+	if (connect(sock, (struct sockaddr *)&in, sizeof (in)) == -1)
+		err(1, "Problem occured while binding the socket.");
+	getsockname(sock, (struct sockaddr *) &loc_info, &sz);
+	*addr = loc_info.sin_addr;
+	inet_ntop(AF_INET, &(loc_info.sin_addr), ip, INET_ADDRSTRLEN);
 }

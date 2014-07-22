@@ -8,8 +8,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <netinet/in.h> 
+#include <netdb.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <strings.h> // bzero
+#include <err.h>
 
 void initCmd(struct cmd *command, struct cmd_function *f) {
 	struct cmd_function *func;
@@ -282,4 +288,44 @@ void port(char **params, short *abor, int fd, struct state *cstate, struct confi
 	sa->sin_port = htons(port_no);
 	cstate->client_addr = (struct sockaddr *) sa; 
 	respond(fd, 2, 0, 0, "Port changed.");
+}
+
+void list(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	pid_t pid;
+	int pd[2];
+	pipe(pd);
+	char buf[256];
+	switch(pid = fork()){
+		case 0:
+			close(1);
+			close(pd[0]);
+			dup(pd[1]);
+			execlp("ls", "ls", "-l", NULL);
+		break;
+		default:
+			close(pd[1]);
+			read(pd[0], buf, 256);
+			buf[256]=0;
+			close(pd[0]);
+		break;
+	}
+	respond(fd, 2, 0, 0, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek/bin");
+}
+
+void pasv(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	int sock, i = 0;
+	char c, buf[64], msg[128];
+	++cstate->transfer_count;
+	spawnDataRoutine(cstate, configuration, &sock);
+	write(sock, "pasv", 4);
+	write(sock, "\0", 1);
+	while(read(sock, &c, 1) > 0){
+		if (c == '.')
+			buf[i++] = ',';
+		else
+			buf[i++] = c;
+		if(c == 0) break;
+	}
+	sprintf(msg, "OK, entering passive mode (%s).", buf);
+	respond(fd, 2, 2, 7, msg);	
 }

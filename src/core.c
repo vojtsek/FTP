@@ -127,11 +127,13 @@ void *controlRoutine(void *arg) {
 
 void *dataRoutine(void *arg){
 	struct data_info *info = (struct data_info *) arg;
-	int sck;
+	int sck, newsock, accepted, port;
 	struct sockaddr_un sa;
+	struct sockaddr_in in;
+	bzero(&in, sizeof (in));
 	bzero(&sa, sizeof (sa));
-	char buf[128];
-
+	char buf[128], ip[32], msg[64];
+	
 	strncpy(sa.sun_path, info->control_sock, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
 
@@ -145,7 +147,37 @@ void *dataRoutine(void *arg){
 	}
 	read(sck, buf, 4);
 	buf[4] = 0;
-	printf("%s\n", buf);
-	free(arg);
+	if(strcmp(buf, "pasv") == 0){
+		port = 16661;
+		in.sin_family = AF_INET;
+		getHostIp(ip, &(in.sin_addr));
+		in.sin_port = htons(port);
+		sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
+		write(sck, msg, strlen(msg) + 1);
+
+	if ((newsock = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
+		perror("Error creating control socket.");
+		return (-1);
+	}
+	if (bind(newsock, (struct sockaddr *) &in, sizeof (in)) == -1){
+		perror("Error binding control socket.");
+		return (-1);
+	}
+	if (listen(newsock, SOMAXCONN) == -1){
+		perror("Error listening on control socket.");
+		return (-1);
+	}
+	if ((accepted = accept(newsock, NULL, 0)) == -1){
+		perror("Error accepting connection on control socket.");
+		return (-1);
+	}
+	printf("%s\n", "Accepted");
+	char msg[128];
+	sprintf(msg, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek\n");
+	write(accepted, msg, strlen(msg));
+	sprintf(msg, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek/bin\n");
+	write(accepted, msg, strlen(msg));
+	close(accepted);
+	}
 	return (arg);
 }
