@@ -10,12 +10,14 @@
 #include <sys/types.h>
 #include <netinet/in.h> 
 #include <netdb.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <strings.h> // bzero
 #include <err.h>
+#include <errno.h>
 
 void initCmd(struct cmd *command, struct cmd_function *f) {
 	struct cmd_function *func;
@@ -30,15 +32,14 @@ void initCmd(struct cmd *command, struct cmd_function *f) {
 }
 
 int respond(int fd, int fst, int snd, int thd, char *response){
-	char code[5];
+	char code[4];
 	code[0] = '0' + fst;
 	code[1] = '0' + snd;
 	code[2] = '0' + thd;
 	code[3] = ' ';
-	code[4] = '\n';
 	if (write(fd, code, 4) == -1) return (-1);
 	if (write(fd, response, strlen(response)) == -1) return (-1);
-	if (write(fd, &code[4], 1) == -1) return (-1);
+	if (write(fd, "\r\n", 2) == -1) return (-1);
 	return (0);
 }
 
@@ -73,8 +74,8 @@ void user(char **params, short *abor, int fd, struct state *cstate, struct confi
 	strcpy(cstate->user, params[0]);
 	cstate->path = (char *) malloc ((2 + strlen(params[0])) * sizeof (char));
 	(*cstate->path) = '/';
-	(*(cstate->path + 1)) = 0;
-	strcpy(cstate->path + 1, params[0]);
+	//(*(cstate->path + 1)) = 0;
+	//strcpy(cstate->path + 1, params[0]);
 	cstate->logged = 0;
 	executeCmd(&psswd, NULL, fd, cstate, configuration);
 }
@@ -199,7 +200,8 @@ void rmd(char **params, short *abor, int fd, struct state *cstate, struct config
 		free(fpath);
 		return;
 	}
-	if(rmdir(fpath) == -1){
+	printf(fpath);
+	if(rmdir("") == -1){
 		respond(fd, 4, 5, 1, "Internal server error.");
 		free(fpath);
 		return;	
@@ -224,13 +226,6 @@ void cdup(char **params, short *abor, int fd, struct state *cstate, struct confi
 	cwd(params, abor, fd, cstate, configuration);
 }
 
-void store(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	int sock;
-	++cstate->transfer_count;
-	spawnDataRoutine(cstate, configuration, &sock);
-	write(sock, "Ahoj", 4);
-}
-
 void syst(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
 	respond(fd, 2, 1, 5, "UNIX Type: L8");
 }
@@ -250,10 +245,6 @@ void noop(char **params, short *abor, int fd, struct state *cstate, struct confi
 }
 
 void port(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	if(!cstate->logged){
-		respond(fd, 5, 3, 0, "Not logged in.");
-		return;
-	}
 	if (params[0] == NULL){
 		respond(fd, 5, 0, 4, "Need address and port.");
 		return;
@@ -280,46 +271,43 @@ void port(char **params, short *abor, int fd, struct state *cstate, struct confi
 	strncpy(port_upper, port_str, comma - port_str);
 	strncpy(port_lower, comma + 1, strlen(port_str) - (comma - port_str));
 	port_no = 0;
-	port_no = (atoi(port_upper) << 8) | atoi(port_lower);
+	port_no = (atoi(port_upper) * 256) + atoi(port_lower);
+	printf("Port: %d\n", port_no);
 	if(inet_pton(AF_INET, ip_str, &(sa->sin_addr)) == -1){
 		respond(fd, 5, 0, 1, "Invalid address.");
 		return;
 	} 
 	sa->sin_port = htons(port_no);
-	cstate->client_addr = (struct sockaddr *) sa; 
+	cstate->client_addr = (struct sockaddr *) sa;
+	if(!cstate->control_sock){
+		spawnDataRoutine(cstate, configuration, &(cstate->control_sock));
+	}
 	respond(fd, 2, 0, 0, "Port changed.");
 }
 
 void list(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	pid_t pid;
-	int pd[2];
-	pipe(pd);
-	char buf[256];
-	switch(pid = fork()){
-		case 0:
-			close(1);
-			close(pd[0]);
-			dup(pd[1]);
-			execlp("ls", "ls", "-l", NULL);
-		break;
-		default:
-			close(pd[1]);
-			read(pd[0], buf, 256);
-			buf[256]=0;
-			close(pd[0]);
-		break;
+	int sock;
+	if(!cstate->data_sock && cstate->client_addr == NULL){
+		respond(fd, 5, 0, 3, "Bad command sequence.");
+		return;
 	}
-	respond(fd, 2, 0, 0, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek/bin");
+	++cstate->transfer_count;
+	write(cstate->control_sock, "DLIST\0", 6);
+	write(cstate->control_sock, cstate->path, strlen(cstate->path));
+	write(cstate->control_sock, "\0", 1);
+
+	respond(fd, 2, 0, 0, "Ok, sending listing of the directory.");
 }
 
 void pasv(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
 	int sock, i = 0;
 	char c, buf[64], msg[128];
-	++cstate->transfer_count;
-	spawnDataRoutine(cstate, configuration, &sock);
-	write(sock, "pasv", 4);
-	write(sock, "\0", 1);
-	while(read(sock, &c, 1) > 0){
+	if(!cstate->control_sock){
+		spawnDataRoutine(cstate, configuration, &sock);
+		cstate->control_sock = sock;
+	}
+	write(cstate->control_sock, "DPASV\0", 6);
+	while(read(cstate->control_sock, &c, 1) > 0){
 		if (c == '.')
 			buf[i++] = ',';
 		else
@@ -328,4 +316,203 @@ void pasv(char **params, short *abor, int fd, struct state *cstate, struct confi
 	}
 	sprintf(msg, "OK, entering passive mode (%s).", buf);
 	respond(fd, 2, 2, 7, msg);	
+}
+
+void d_pasv(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	int newsock, port, optval = 1, sock_des;
+	struct sockaddr_in in;
+	bzero(&in, sizeof (in));
+	char cmd[16], ip[INET_ADDRSTRLEN], msg[64];
+
+	struct cmd command;
+	port = 16384;
+	in.sin_family = AF_INET;
+	getHostIp(ip, &(in.sin_addr));
+	in.sin_port = htons(port);
+	// printf("%d\n", cstate->data_sock);
+	if(cstate->data_sock){
+		close(cstate->data_sock);
+		cstate->data_sock = 0;
+	}
+	if ((newsock = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
+		perror("Error creating control socket.");
+		return (-1);
+	}
+	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
+		&optval, sizeof (optval)) == -1)
+		err(1, "Problem occured while creating the socket.");
+
+	while((bind(newsock, (struct sockaddr *) &in, sizeof (in)) == -1) && (errno == EADDRINUSE)){
+		++port;
+		in.sin_port = htons(port);
+		errno = 0;
+	}
+	if (errno){
+		perror("Error binding control socket.");
+		return (-1);
+	}
+	if (listen(newsock, SOMAXCONN) == -1){
+		perror("Error listening on control socket.");
+		return (-1);
+	}
+	sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
+	write(fd, msg, strlen(msg) + 1);
+	cstate->data_sock = newsock;
+	REP("Awaiting connection...");
+}
+
+void d_list(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	int accepted;
+	spawnConnection(cstate, &accepted);
+	pid_t pid;
+	int pd[2];
+	pipe(pd);
+	char buf[256], dir[32], path[128];
+	readUntil(dir, fd, 0);
+	sprintf(path, "%s%s", configuration->root_dir, dir);
+	REP(path);
+	switch(pid = fork()){
+		case 0:
+			close(1);
+			close(pd[0]);
+			dup(pd[1]);
+			execlp("ls", "ls", "-l", path, NULL);
+		break;
+		default:
+			close(pd[1]);
+			while(readUntil(buf, pd[0], '\n') != -1){
+				write(accepted, buf, strlen(buf));
+				REP(buf);
+				write(accepted, "\n", 1);
+			}
+			close(pd[0]);
+		break;
+	}
+	close(accepted);
+	//cstate->data_sock = 0;
+}
+
+void retr(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	// char filepath[128];
+	char *filepath = (char *) malloc(128*sizeof(char));
+	int retcode;
+	if (params[0] == NULL){
+		respond(fd, 5, 0, 4, "No filename given.");
+		return;
+	}
+	if(!cstate->logged) {
+		respond(fd, 5, 3, 0, "No logged in.");
+	}
+	if(!cstate->data_sock && cstate->client_addr == NULL){
+		respond(fd, 5, 0, 3, "Bad command sequence.");
+		return;
+	}
+	getFullPath(filepath, cstate, configuration, params[0]);
+	write(cstate->control_sock, "DRETR\0", 6);
+	write(cstate->control_sock, filepath, strlen(filepath));
+	write(cstate->control_sock, "\0", 1);
+
+	respond(fd, 1, 5, 0, "Ok, about to open data connection.");
+	read(cstate->control_sock, &retcode, sizeof (int));
+	switch (retcode) {
+		case 2:
+			respond(fd, 2, 2, 6, "File succcessfuly transfered."); break;
+		case 5:
+			respond(fd, 5, 5, 1, "File transfer aborted."); break;
+	}
+}
+
+void d_retr(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	int accepted, retcode, file, r;
+	char filepath[128], buf[BUFSIZE];
+	spawnConnection(cstate, &accepted);
+	readUntil(filepath, fd, 0);
+	if (isFileOk(filepath) == -1){
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(accepted);
+		return;
+	}
+	if ((file = open(filepath, O_RDONLY)) == -1){
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(accepted);
+		return;
+	}
+	while((r = read(file, buf, BUFSIZE)) > 0){
+		if (write(accepted, buf, r) == -1) {
+			retcode = 5;
+			write(fd, &retcode, sizeof (int));
+			close(accepted);
+			break;
+		}
+	}
+	close(file);
+	close(accepted);
+	retcode = 2;
+	write(fd, &retcode, sizeof (int));
+
+}
+
+void stor(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	// char filepath[128];
+	char *filepath = (char *) malloc(128*sizeof(char));
+	int retcode;
+	if (params[0] == NULL){
+		respond(fd, 5, 0, 4, "No filename given.");
+		return;
+	}
+	if(!cstate->logged) {
+		respond(fd, 5, 3, 0, "No logged in.");
+	}
+	if(!cstate->data_sock && cstate->client_addr == NULL){
+		respond(fd, 5, 0, 3, "Bad command sequence.");
+		return;
+	}
+	getFullPath(filepath, cstate, configuration, params[0]);
+	write(cstate->control_sock, "DSTOR\0", 6);
+	write(cstate->control_sock, filepath, strlen(filepath));
+	write(cstate->control_sock, "\0", 1);
+
+	respond(fd, 1, 5, 0, "Ok, about to open data connection.");
+	read(cstate->control_sock, &retcode, sizeof (int));
+	switch (retcode) {
+		case 2:
+			respond(fd, 2, 2, 6, "File succcessfuly transfered."); break;
+		case 5:
+			respond(fd, 5, 5, 1, "File transfer aborted."); break;
+	}
+}
+
+void d_stor(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	int accepted, retcode, file, r;
+	char filepath[128], buf[BUFSIZE];
+	spawnConnection(cstate, &accepted);
+	readUntil(filepath, fd, 0);
+	// if (isFileOk(filepath) == -1){
+	// 	retcode = 5;
+	// 	write(fd, &retcode, sizeof (int));
+	// 	return;
+	// }
+	if ((file = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, 0700)) == -1){
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(accepted);
+		return;
+	}
+	REP("accepted");
+	while((r = read(accepted, buf, BUFSIZE)) > 0){
+		printf("%d\n", r);
+		if (write(file, buf, r) == -1) {
+			retcode = 5;
+			write(fd, &retcode, sizeof (int));
+			close(accepted);
+			break;
+		}
+	}
+	REP("After...");
+	close(file);
+	retcode = 2;
+	write(fd, &retcode, sizeof (int));
+	close(accepted);
 }

@@ -1,6 +1,13 @@
 #ifndef COMMON_H
 #define	COMMON_H
 
+#define DEBUG
+#ifdef DEBUG
+#define REP(WHAT) printf("%s\n", WHAT); fflush(stdout);
+#else
+#define REP(WHAT) do { } while(0);
+#endif
+
 #include "conf.h"
 #include "structures.h"
 
@@ -17,11 +24,15 @@ char *changeDir(char *, char *);
 
 short isDir(char *);
 
+short isFileOk(char *);
+
 int lookupUser(char *, char *, char *);
 
-char *readUntil(int, char);
+int readUntil(char*, int, char);
 
 int getFullPath(char *, struct state *, struct config *, char *);
 
 int getHostIp(char *, struct in_addr *);
+
+short spawnConnection(struct state *, int *);
 #endif

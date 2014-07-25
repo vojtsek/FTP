@@ -10,10 +10,14 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <pthread.h>
 #include <sys/un.h>
 #include <strings.h> // bzero
 #include <errno.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#define MAXHOST 256
 
 void readConfiguration(struct config *configuration, int argc, char **argv) {
 	size_t opt;
@@ -57,6 +61,7 @@ root directory: %s\n",
 configuration->data_port, configuration->ctrl_port,
 configuration->max_conns, configuration->root_dir);
 }
+
 
 void logReport(char *msg) {
 	fprintf(stdout, "%s\n", msg);
@@ -110,29 +115,37 @@ short isDir(char *dir){
 	return (0);
 }
 
-char *readUntil(int fd, char sep){
-	char *buf = (char *) malloc (256 * sizeof (char));
+short isFileOk(char *fn){
+	struct stat st;
+	if(stat(fn, &st) == -1){
+		return (-1);
+	}
+	return (0);
+}
+
+int readUntil(char *buf, int fd, char sep){
 	char *res = buf;
-	char c;
+	char c = 0;
 	while((read(fd, &c, 1) > 0) && (c != sep)){
 		(*buf++) = c;
 	}
-	if(c == sep) return (res);
-	else {
-		free(res);
-		return (NULL);
+	if(c == sep){
+		*buf = 0;
+		return (0);
+	}
+	else if (c == 0) {
+		return (-1);
 	}
 }
 
 int lookupUser(char *path, char *username, char *passwd){
-	char *user, *pswd;
-	user = pswd = NULL;
+	char user[64], pswd[64];
+	user[0] = pswd[0] = 0;
 	int fd, res = 1;
 	if((fd = open(path, O_RDONLY)) == -1 )
 		return (-1);
-	while((user = readUntil(fd, ':')) != NULL){
-		pswd = readUntil(fd, '\n');
-		if(pswd == NULL){
+	while((readUntil(user, fd, ':')) != -1){
+		if(readUntil(pswd, fd, '\n') == -1){
 			res = 1;
 			break;
 		}
@@ -140,17 +153,12 @@ int lookupUser(char *path, char *username, char *passwd){
 			res = 0;
 			break;
 		}
-		free(pswd);
-		free(user);
-		pswd = user = NULL;
 	}
-	if (pswd == NULL){
+	if (pswd[0] == 0){
 		return (1);
 	}
 	if(passwd == NULL) return (res);
 	strcpy(passwd, pswd);
-	free(pswd);
-	free(user);
 	return (res);
 }
 
@@ -169,22 +177,76 @@ int getFullPath(char *fpath, struct state *cstate, struct config *configuration,
 		return (-1);
 	if ((fpath = changeDir(fpath, dirname)) == NULL)
 		return (-1);
+	REP(fpath);
 	return (0);
 }
 
 int getHostIp(char *ip, struct in_addr *addr){
-	size_t sock;
-	struct sockaddr_in in;
-	struct sockaddr_in loc_info;
-	int sz = sizeof (loc_info);
-	in.sin_family = AF_INET;
-	in.sin_addr.s_addr = inet_addr("78.128.193.44");
-	in.sin_port = htons(21);
-	if ((sock = socket(AF_INET, SOCK_STREAM, 6)) == -1)
-		err(1, "Problem occured while creating the socket.");
-	if (connect(sock, (struct sockaddr *)&in, sizeof (in)) == -1)
-		err(1, "Problem occured while binding the socket.");
-	getsockname(sock, (struct sockaddr *) &loc_info, &sz);
-	*addr = loc_info.sin_addr;
-	inet_ntop(AF_INET, &(loc_info.sin_addr), ip, INET_ADDRSTRLEN);
+
+	struct ifaddrs *ifAddrStruct;
+    struct ifaddrs *ifa;
+    void *tmpAddrPtr;
+    char msg[128];
+
+    getifaddrs(&ifAddrStruct);
+
+    for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family == AF_INET) { // check it is IP4
+            // is a valid IP4 Address
+            tmpAddrPtr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            inet_ntop(AF_INET, tmpAddrPtr, ip, INET_ADDRSTRLEN);
+            if(strcmp(ip, "127.0.0.1") != 0){
+            	sprintf(msg, "Using interface %s", ifa->ifa_name);
+            	REP(msg);
+            	break;
+            }
+        }
+            // printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
+        // } else if (ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
+        //     // is a valid IP6 Address
+        //     tmpAddrPtr=&((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+        //     char addressBuffer[INET6_ADDRSTRLEN];
+        //     inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
+        //     printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
+        // } 
+    }
+    if (ifAddrStruct != NULL) freeifaddrs(ifAddrStruct);
+    else return (-1);
+
+    *addr = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+	return (0);
+
+	// size_t sock;
+	// struct sockaddr_in in;
+	// struct sockaddr_in loc_info;
+	// int sz = sizeof (loc_info);
+	// write(sock_des, "kua", 3);
+	// bzero(&loc_info, sizeof (loc_info));
+	// in.sin_family = AF_INET;
+	// in.sin_addr.s_addr = inet_addr("127.0.0.1");
+	// in.sin_port = htons(1038);
+
+	// getsockname(sock_des, (struct sockaddr *) &loc_info, &sz);
+}
+
+short spawnConnection(struct state *cstate, int *accepted){
+	*accepted = 0;
+	if(!cstate->data_sock){
+		if ((*accepted = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
+			perror("Error creating data socket.");
+			return;
+		}
+		if ((connect(*accepted, cstate->client_addr, sizeof(cstate->client_addr))) == -1) {
+			perror("Error creating data socket.");
+			return;
+		}
+		REP("Connected!");
+	}else{
+		if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1){
+			perror("Error accepting connection on data socket.");
+			return;
+		}
+	}
+	if(!(*accepted)) return (-1);
+	else return (0);
 }

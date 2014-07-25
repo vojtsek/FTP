@@ -14,6 +14,7 @@ struct state {
 	char *user;
 	char *path;
 	size_t data_port, transfer_count;
+	int data_sock, control_sock;
 	struct sockaddr *client_addr;
 };
 
@@ -39,6 +40,7 @@ struct data_info {
 	char *path;
 	char *fn;
 	struct config *configuration;
+	struct state *cstate;
 	struct sockaddr *client_addr;
 };
 

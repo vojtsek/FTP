@@ -95,6 +95,7 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 	info->configuration = (struct config *) malloc(sizeof (struct config));
 	info->user = cstate->user;
 	info->path = cstate->path;
+	info->cstate = cstate;
 	strcpy(info->control_sock, name);
 	info->configuration = configuration;
 	info->client_addr = cstate->client_addr;
@@ -115,7 +116,7 @@ void *controlRoutine(void *arg) {
 	struct control_info *info = (struct control_info *) arg;
 	int fd = info->fd;
 	struct cmd command;
-	struct state cstate = {0, NULL, info->configuration->root_dir, info->configuration->data_port, 0, info->client_addr};
+	struct state cstate = {0, NULL, "/", info->configuration->data_port, 0, 0, 0, info->client_addr};
 	short abor = 0;
 	while (readCmd(fd, &command) != -1) {
 		printf("%s\n", command.name);
@@ -132,8 +133,8 @@ void *dataRoutine(void *arg){
 	struct sockaddr_in in;
 	bzero(&in, sizeof (in));
 	bzero(&sa, sizeof (sa));
-	char buf[128], ip[32], msg[64];
-	
+	char cmd[16], ip[32], msg[64];
+	struct state cstate = *(info->cstate);
 	strncpy(sa.sun_path, info->control_sock, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
 
@@ -145,39 +146,14 @@ void *dataRoutine(void *arg){
 		perror("Error connecting to control socket.");
 		return (arg);
 	}
-	read(sck, buf, 4);
-	buf[4] = 0;
-	if(strcmp(buf, "pasv") == 0){
-		port = 16661;
-		in.sin_family = AF_INET;
-		getHostIp(ip, &(in.sin_addr));
-		in.sin_port = htons(port);
-		sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
-		write(sck, msg, strlen(msg) + 1);
-
-	if ((newsock = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
-		perror("Error creating control socket.");
-		return (-1);
-	}
-	if (bind(newsock, (struct sockaddr *) &in, sizeof (in)) == -1){
-		perror("Error binding control socket.");
-		return (-1);
-	}
-	if (listen(newsock, SOMAXCONN) == -1){
-		perror("Error listening on control socket.");
-		return (-1);
-	}
-	if ((accepted = accept(newsock, NULL, 0)) == -1){
-		perror("Error accepting connection on control socket.");
-		return (-1);
-	}
-	printf("%s\n", "Accepted");
-	char msg[128];
-	sprintf(msg, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek\n");
-	write(accepted, msg, strlen(msg));
-	sprintf(msg, "drwxr-xr-x 2 vojcek vojcek 4096 Jul 20 22:18 /vojcek/bin\n");
-	write(accepted, msg, strlen(msg));
-	close(accepted);
+	struct cmd command;
+	cstate.data_sock = 0;
+	while(1){
+		printf("%d\n", cstate.data_sock);
+		readUntil(command.name, sck, 0);
+		REP(command.name);
+		executeCmd(&command, NULL, sck, &cstate, info->configuration);
+		info->cstate->data_sock = cstate.data_sock;
 	}
 	return (arg);
 }
