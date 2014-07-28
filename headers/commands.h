@@ -23,6 +23,7 @@ void list(char **, short *, int, struct state *, struct config *);
 void pasv(char **, short *, int, struct state *, struct config *);
 void stor(char **, short *, int, struct state *, struct config *);
 void retr(char **, short *, int, struct state *, struct config *);
+void abor(char **, short *, int, struct state *, struct config *);
 
 void d_pasv(char **, short *, int, struct state *, struct config *);
 void d_list(char **, short *, int, struct state *, struct config *);
@@ -47,8 +48,9 @@ static struct cmd_function noop_cmd = {&feat_cmd, noop, "NOOP"};
 static struct cmd_function port_cmd = {&noop_cmd, port, "PORT"};
 static struct cmd_function list_cmd = {&port_cmd, list, "LIST"};
 static struct cmd_function pasv_cmd = {&list_cmd, pasv, "PASV"};
+static struct cmd_function abor_cmd = {&pasv_cmd, abor, "ABOR"};
 
-static struct cmd_function d_pasv_cmd = {&pasv_cmd, d_pasv, "DPASV"};
+static struct cmd_function d_pasv_cmd = {&abor_cmd, d_pasv, "DPASV"};
 static struct cmd_function d_list_cmd = {&d_pasv_cmd, d_list, "DLIST"};
 static struct cmd_function d_retr_cmd = {&d_list_cmd, d_retr, "DRETR"};
 static struct cmd_function d_stor_cmd = {&d_retr_cmd, d_stor, "DSTOR"};

@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define	COMMON_H
 
+#define PATH_LENGTH 256
+#define USER_LENGTH 32
 #define DEBUG
 #ifdef DEBUG
 #define REP(WHAT) printf("%s\n", WHAT); fflush(stdout);

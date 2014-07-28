@@ -1,5 +1,6 @@
 #include "../headers/networking.h"
 #include "../headers/common.h"
+#include "../headers/commands.h"
 #include "../headers/structures.h"
 #include "../headers/core.h"
 #include <sys/socket.h>

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
 struct config {
 	size_t ctrl_port, data_port, max_conns;
@@ -11,11 +12,12 @@ struct config {
 
 struct state {
 	short logged;
-	char *user;
-	char *path;
+	char user[32];
+	char path[256];
 	size_t data_port, transfer_count;
-	int data_sock, control_sock;
-	struct sockaddr *client_addr;
+	int data_sock, control_sock, port, last_accepted;
+	pthread_t data_thread;
+	struct sockaddr_in client_addr;
 };
 
 typedef void (*cmd_fnc) (char **, short *, int, struct state*, struct config *);

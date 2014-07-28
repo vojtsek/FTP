@@ -18,6 +18,7 @@
 #include <strings.h> // bzero
 #include <err.h>
 #include <errno.h>
+#include <stropts.h>
 
 void initCmd(struct cmd *command, struct cmd_function *f) {
 	struct cmd_function *func;
@@ -69,10 +70,7 @@ void user(char **params, short *abor, int fd, struct state *cstate, struct confi
 		respond(fd, 5, 0, 3, "Bad command sequence.");
 		return;
 	}
-	free(cstate->user);
-	cstate->user = (char *) malloc ((1 + strlen(params[0])) * sizeof (char));
 	strcpy(cstate->user, params[0]);
-	cstate->path = (char *) malloc ((2 + strlen(params[0])) * sizeof (char));
 	(*cstate->path) = '/';
 	//(*(cstate->path + 1)) = 0;
 	//strcpy(cstate->path + 1, params[0]);
@@ -147,8 +145,7 @@ void cwd(char **params, short *abor, int fd, struct state *cstate, struct config
 		return;
 	}
 	free(dir);
-	if ((cstate->path = changeDir(cstate->path, params[0])) == NULL){
-		cstate->path = (char *) malloc (256 * sizeof (char));
+	if (changeDir(cstate->path, params[0]) == NULL){
 		strcpy(cstate->path, old_path);
 		free(old_path);
 		respond(fd, 4, 5, 1, "Internal server error.");	
@@ -240,8 +237,19 @@ void feat(char **params, short *abor, int fd, struct state *cstate, struct confi
 }
 
 void noop(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	printf("port: %d\n", ((struct sockaddr_in *)cstate->client_addr)->sin_port);
 	respond(fd, 2, 2, 0, "OK.");
+}
+
+void abor(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
+	if(!cstate->last_accepted){
+		respond(fd, 2, 2, 6, "OK.");
+		return;
+	}
+	close(cstate->last_accepted);
+	cstate->last_accepted = 0;
+	respond(fd, 4, 2, 6, "Canceled.");
+	respond(fd, 2, 2, 6, "OK.");
+
 }
 
 void port(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
@@ -278,7 +286,9 @@ void port(char **params, short *abor, int fd, struct state *cstate, struct confi
 		return;
 	} 
 	sa->sin_port = htons(port_no);
-	cstate->client_addr = (struct sockaddr *) sa;
+	sa->sin_family = AF_INET;
+	cstate->client_addr = *sa;
+	cstate->port = 1;
 	if(!cstate->control_sock){
 		spawnDataRoutine(cstate, configuration, &(cstate->control_sock));
 	}
@@ -286,8 +296,8 @@ void port(char **params, short *abor, int fd, struct state *cstate, struct confi
 }
 
 void list(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	int sock;
-	if(!cstate->data_sock && cstate->client_addr == NULL){
+	int retcode;
+	if(!cstate->data_sock && !cstate->port){
 		respond(fd, 5, 0, 3, "Bad command sequence.");
 		return;
 	}
@@ -296,7 +306,15 @@ void list(char **params, short *abor, int fd, struct state *cstate, struct confi
 	write(cstate->control_sock, cstate->path, strlen(cstate->path));
 	write(cstate->control_sock, "\0", 1);
 
-	respond(fd, 2, 0, 0, "Ok, sending listing of the directory.");
+	respond(fd, 1, 5, 0, "Ok, sending listing of the directory.");
+	read(cstate->control_sock, &retcode, sizeof (int));
+	switch (retcode) {
+		case 2:
+			respond(fd, 2, 2, 6, "Directory listing succcessful."); break;
+		case 5:
+			respond(fd, 5, 5, 1, "File transfer aborted."); break;
+	}
+
 }
 
 void pasv(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
@@ -319,12 +337,11 @@ void pasv(char **params, short *abor, int fd, struct state *cstate, struct confi
 }
 
 void d_pasv(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	int newsock, port, optval = 1, sock_des;
+	int newsock, port, optval = 1;
 	struct sockaddr_in in;
 	bzero(&in, sizeof (in));
-	char cmd[16], ip[INET_ADDRSTRLEN], msg[64];
+	char ip[INET_ADDRSTRLEN], msg[64];
 
-	struct cmd command;
 	port = 16384;
 	in.sin_family = AF_INET;
 	getHostIp(ip, &(in.sin_addr));
@@ -335,13 +352,17 @@ void d_pasv(char **params, short *abor, int fd, struct state *cstate, struct con
 		cstate->data_sock = 0;
 	}
 	if ((newsock = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
-		perror("Error creating control socket.");
-		return (-1);
+		perror("Error creating data socket.");
+		return;
 	}
 	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
 		&optval, sizeof (optval)) == -1)
 		err(1, "Problem occured while creating the socket.");
-
+	
+	if(fcntl(newsock, F_SETFL, fcntl(newsock, F_GETFL) | O_NONBLOCK) == -1){
+		perror("Error creating data socket.");
+		return;
+	}
 	while((bind(newsock, (struct sockaddr *) &in, sizeof (in)) == -1) && (errno == EADDRINUSE)){
 		++port;
 		in.sin_port = htons(port);
@@ -349,11 +370,11 @@ void d_pasv(char **params, short *abor, int fd, struct state *cstate, struct con
 	}
 	if (errno){
 		perror("Error binding control socket.");
-		return (-1);
+		return;
 	}
 	if (listen(newsock, SOMAXCONN) == -1){
 		perror("Error listening on control socket.");
-		return (-1);
+		return;
 	}
 	sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
 	write(fd, msg, strlen(msg) + 1);
@@ -362,10 +383,11 @@ void d_pasv(char **params, short *abor, int fd, struct state *cstate, struct con
 }
 
 void d_list(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
-	int accepted;
+	int accepted, retcode;
 	spawnConnection(cstate, &accepted);
+	// ioctl(accepted, I_FLUSH, FLUSHRW);
 	pid_t pid;
-	int pd[2];
+	int pd[2], r;
 	pipe(pd);
 	char buf[256], dir[32], path[128];
 	readUntil(dir, fd, 0);
@@ -380,15 +402,19 @@ void d_list(char **params, short *abor, int fd, struct state *cstate, struct con
 		break;
 		default:
 			close(pd[1]);
-			while(readUntil(buf, pd[0], '\n') != -1){
+			while((r = readUntil(buf, pd[0], '\n')) != -1){
 				write(accepted, buf, strlen(buf));
 				REP(buf);
 				write(accepted, "\n", 1);
+				if (r == 1) break;
 			}
 			close(pd[0]);
 		break;
 	}
+	REP("Closing");
 	close(accepted);
+	retcode = 2;
+	write(fd, &retcode, sizeof (int));
 	//cstate->data_sock = 0;
 }
 
@@ -403,7 +429,7 @@ void retr(char **params, short *abor, int fd, struct state *cstate, struct confi
 	if(!cstate->logged) {
 		respond(fd, 5, 3, 0, "No logged in.");
 	}
-	if(!cstate->data_sock && cstate->client_addr == NULL){
+	if(!cstate->data_sock && cstate->port == 0){
 		respond(fd, 5, 0, 3, "Bad command sequence.");
 		return;
 	}
@@ -433,6 +459,8 @@ void d_retr(char **params, short *abor, int fd, struct state *cstate, struct con
 		close(accepted);
 		return;
 	}
+	REP("accepted");
+	REP(filepath);
 	if ((file = open(filepath, O_RDONLY)) == -1){
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
@@ -440,6 +468,7 @@ void d_retr(char **params, short *abor, int fd, struct state *cstate, struct con
 		return;
 	}
 	while((r = read(file, buf, BUFSIZE)) > 0){
+		usleep(500000);
 		if (write(accepted, buf, r) == -1) {
 			retcode = 5;
 			write(fd, &retcode, sizeof (int));
@@ -456,7 +485,7 @@ void d_retr(char **params, short *abor, int fd, struct state *cstate, struct con
 
 void stor(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
 	// char filepath[128];
-	char *filepath = (char *) malloc(128*sizeof(char));
+	char filepath[256];
 	int retcode;
 	if (params[0] == NULL){
 		respond(fd, 5, 0, 4, "No filename given.");
@@ -465,7 +494,7 @@ void stor(char **params, short *abor, int fd, struct state *cstate, struct confi
 	if(!cstate->logged) {
 		respond(fd, 5, 3, 0, "No logged in.");
 	}
-	if(!cstate->data_sock && cstate->client_addr == NULL){
+	if(!cstate->data_sock && cstate->port == 0){
 		respond(fd, 5, 0, 3, "Bad command sequence.");
 		return;
 	}
@@ -487,7 +516,9 @@ void stor(char **params, short *abor, int fd, struct state *cstate, struct confi
 void d_stor(char **params, short *abor, int fd, struct state *cstate, struct config *configuration) {
 	int accepted, retcode, file, r;
 	char filepath[128], buf[BUFSIZE];
+	accepted = 0;
 	spawnConnection(cstate, &accepted);
+	REP("Spawned!");
 	readUntil(filepath, fd, 0);
 	// if (isFileOk(filepath) == -1){
 	// 	retcode = 5;

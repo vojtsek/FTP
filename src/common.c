@@ -72,35 +72,23 @@ short isWhite(char c) {
 }
 
 char *changeDir(char *path, char *dir) {
-	char *last_slash, *old_path = path;
+	char *last_slash;
 	// step up one directory
 	if (strcmp(dir, "..") == 0){
 		if (((last_slash = strrchr(path, '/')) == path) || (last_slash == NULL)) { // root dir or invalid path
-			return path;
+			return (path);
 		}
-		if((path = realloc(path, (last_slash - path) + 1)) == NULL){
-			free(old_path);
-			return NULL;
-		}
-		(*last_slash) = 0;
+		(*last_slash) = 0; // shorten the string
 		return path;
 	}
 	if(dir[0] == '/'){
-		if((path = realloc(path, strlen(dir) + 1)) == NULL){
-			free(old_path);
-			return NULL;
-		}
 		if (strcpy(path, dir) == NULL){
-			free(old_path);
-			return NULL;
+			return (NULL);
 		}
 		return path;
 	}
 	size_t path_l = strlen(path);
-	if ((path = realloc(path, path_l + strlen(dir) + 2)) == NULL){
-		free(old_path);
-		return NULL;
-	}
+	if ((path_l + strlen(dir) + 1) > PATH_LENGTH) return (NULL);
 	path[path_l] = '/';
 	path[path_l + 1] = 0;
 	strcat(path, dir);
@@ -124,7 +112,6 @@ short isFileOk(char *fn){
 }
 
 int readUntil(char *buf, int fd, char sep){
-	char *res = buf;
 	char c = 0;
 	while((read(fd, &c, 1) > 0) && (c != sep)){
 		(*buf++) = c;
@@ -134,8 +121,9 @@ int readUntil(char *buf, int fd, char sep){
 		return (0);
 	}
 	else if (c == 0) {
-		return (-1);
+		return (1);
 	}
+	return (-1);
 }
 
 int lookupUser(char *path, char *username, char *passwd){
@@ -215,38 +203,37 @@ int getHostIp(char *ip, struct in_addr *addr){
 
     *addr = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 	return (0);
-
-	// size_t sock;
-	// struct sockaddr_in in;
-	// struct sockaddr_in loc_info;
-	// int sz = sizeof (loc_info);
-	// write(sock_des, "kua", 3);
-	// bzero(&loc_info, sizeof (loc_info));
-	// in.sin_family = AF_INET;
-	// in.sin_addr.s_addr = inet_addr("127.0.0.1");
-	// in.sin_port = htons(1038);
-
-	// getsockname(sock_des, (struct sockaddr *) &loc_info, &sz);
 }
 
 short spawnConnection(struct state *cstate, int *accepted){
 	*accepted = 0;
+	char str[INET_ADDRSTRLEN];
+
+
+// now get it back and print it
+	inet_ntop(AF_INET, &(cstate->client_addr.sin_addr), str, INET_ADDRSTRLEN);
+	REP(str);
 	if(!cstate->data_sock){
 		if ((*accepted = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
 			perror("Error creating data socket.");
-			return;
+			return (-1);
 		}
-		if ((connect(*accepted, cstate->client_addr, sizeof(cstate->client_addr))) == -1) {
+		if ((connect(*accepted, (struct sockaddr *)&(cstate->client_addr), sizeof(cstate->client_addr))) == -1) {
 			perror("Error creating data socket.");
-			return;
+			return (-1);
 		}
 		REP("Connected!");
 	}else{
 		if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1){
 			perror("Error accepting connection on data socket.");
-			return;
+			return (-1);
 		}
 	}
 	if(!(*accepted)) return (-1);
-	else return (0);
+	if(fcntl(*accepted, F_SETFL, fcntl(*accepted, F_GETFL) | O_NONBLOCK) == -1){
+		perror("Error accepting connection.");
+		return (-1);
+	}
+	cstate->last_accepted = *accepted;
+	return (0);
 }

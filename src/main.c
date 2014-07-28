@@ -3,6 +3,7 @@
 #include "../headers/common.h"
 #include "../headers/networking.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 int main(int argc, char **argv) {
 

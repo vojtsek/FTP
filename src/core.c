@@ -70,6 +70,7 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 	name[4] = 0;
 	int sck;
 	struct sockaddr_un sa;
+	pthread_t data_thread;
 
 	unlink(name);
 	bzero(&sa, sizeof (sa));
@@ -98,13 +99,13 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 	info->cstate = cstate;
 	strcpy(info->control_sock, name);
 	info->configuration = configuration;
-	info->client_addr = cstate->client_addr;
-	pthread_t data_thread;
+	info->client_addr = &(cstate->client_addr);
 	if ((pthread_create(&data_thread, NULL,
 		&dataRoutine, info)) != 0){
 		perror("Error while creating thread.");
 		return (-1);
 	}
+	cstate->data_thread = data_thread;
 	if ((*sock = accept(sck, NULL, 0)) == -1){
 		perror("Error accepting connection on control socket.");
 		return (-1);
@@ -116,7 +117,7 @@ void *controlRoutine(void *arg) {
 	struct control_info *info = (struct control_info *) arg;
 	int fd = info->fd;
 	struct cmd command;
-	struct state cstate = {0, NULL, "/", info->configuration->data_port, 0, 0, 0, info->client_addr};
+	struct state cstate = {0, NULL, "/", info->configuration->data_port, 0, 0, 0, 0, 0, 0, info->client_addr };
 	short abor = 0;
 	while (readCmd(fd, &command) != -1) {
 		printf("%s\n", command.name);
@@ -128,12 +129,11 @@ void *controlRoutine(void *arg) {
 
 void *dataRoutine(void *arg){
 	struct data_info *info = (struct data_info *) arg;
-	int sck, newsock, accepted, port;
+	int sck;
 	struct sockaddr_un sa;
 	struct sockaddr_in in;
 	bzero(&in, sizeof (in));
 	bzero(&sa, sizeof (sa));
-	char cmd[16], ip[32], msg[64];
 	struct state cstate = *(info->cstate);
 	strncpy(sa.sun_path, info->control_sock, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
@@ -154,6 +154,7 @@ void *dataRoutine(void *arg){
 		REP(command.name);
 		executeCmd(&command, NULL, sck, &cstate, info->configuration);
 		info->cstate->data_sock = cstate.data_sock;
+		info->cstate->last_accepted = cstate.last_accepted;
 	}
 	return (arg);
 }
