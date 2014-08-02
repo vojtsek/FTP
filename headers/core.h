@@ -9,4 +9,5 @@ int executeCmd(struct cmd *, short *, int, struct state *, struct config *);
 void *controlRoutine(void *);
 void *dataRoutine(void *);
 int spawnDataRoutine(struct state *, struct config *, int *);
+void freeCmd(struct cmd *);
 #endif

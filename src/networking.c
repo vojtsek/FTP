@@ -14,21 +14,35 @@
 #include <stdlib.h>
 #include <err.h>
 
+// initiate the server to the listening state
 int startServer(struct config *configuration) {
 	size_t sock, newsock, psize, optval = 1;
 	pid_t pid;
-	struct sockaddr_in6 in6;
+	// struct sockaddr_in6 in6;
+	// psize = sizeof (struct sockaddr);
+	// struct sockaddr *peer_addr = (struct sockaddr *) malloc(psize);
+	// bzero(&in6, sizeof (in6));
+
+	// // initialize option
+	// bzero(peer_addr, psize);
+	// in6.sin6_family = AF_INET6;
+	// in6.sin6_port = htons(configuration->ctrl_port);
+	// bzero(&in6.sin6_addr.s6_addr, 16);
+	// // open main listening stream socket, IPv6, TCP
+	// if ((sock = socket(AF_INET6, SOCK_STREAM, 6)) == -1)
+	struct sockaddr_in in;
 	psize = sizeof (struct sockaddr);
 	struct sockaddr *peer_addr = (struct sockaddr *) malloc(psize);
-	// initialize IPv4 option
-	bzero(&in6, sizeof (in6));
+	bzero(&in, sizeof (in));
 
+	// initialize option
 	bzero(peer_addr, psize);
-	in6.sin6_family = AF_INET6;
-	in6.sin6_port = htons(configuration->ctrl_port);
-	bzero(&in6.sin6_addr.s6_addr, 16);
-	// open main listening stream socket, IPv4, TCP
-	if ((sock = socket(AF_INET6, SOCK_STREAM, 6)) == -1)
+	in.sin_family = AF_INET;
+	in.sin_port = htons(configuration->ctrl_port);
+	// bzero(&in6.sin6_addr.s6_addr, 16);
+	// open main listening stream socket, IPv6, TCP
+	if ((sock = socket(AF_INET, SOCK_STREAM, 6)) == -1)
+
 		err(1, "Problem occured while creating the socket.");
 
 	// make the used port reusable immediately
@@ -37,10 +51,10 @@ int startServer(struct config *configuration) {
 		err(1, "Problem occured while creating the socket.");
 
 	// bind the socket with the port
-	if (bind(sock, (struct sockaddr *)&in6, sizeof (in6)) == -1)
+	if (bind(sock, (struct sockaddr *)&in, sizeof (in)) == -1)
 		err(1, "Problem occured while binding the socket.");
 
-	// lsiten (maximum possible number of connections in the queue)
+	// listen (maximum possible number of connections in the queue)
 	if (listen(sock, SOMAXCONN) == -1)
 		err(1, "Problem occured while trying to listen.");
 
@@ -62,7 +76,6 @@ int startServer(struct config *configuration) {
 			// parent
 			default:
 				close(newsock);
-				logReport("Connection accepted");
 			break;
 		}
 	}
@@ -70,30 +83,38 @@ int startServer(struct config *configuration) {
 	return (0);
 }
 
+// handles the accepted control connection
 int runInstance(struct config *configuration,
 	struct sockaddr *client_addr, int sock) {
-	char numeric_addr[INET6_ADDRSTRLEN];
+	char numeric_addr[INET_ADDRSTRLEN]; //inet6
 	char cmd[256];
+	char msg[128];
 	pthread_t control_thread;
-	bzero(numeric_addr, INET6_ADDRSTRLEN);
+	struct control_info info;
+	bzero(numeric_addr, INET_ADDRSTRLEN);
 	bzero(cmd, 256);
 
 	inet_ntop(((struct sockaddr_storage *)client_addr)->ss_family,
-		&(((struct sockaddr_in6 *)client_addr)->sin6_addr.s6_addr),
+		&(((struct sockaddr_in *)client_addr)->sin_addr.s_addr), //sestky
 		numeric_addr, sizeof (numeric_addr));
-	printf("Recognized peer with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
+	sprintf(msg, "Connected peer with address '%s' on port %d.\n",
+		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port); //sestky
+	logReport(msg);
 	respond(sock, 2, 2, 0, "Service ready");
-	struct control_info info;
+	// make the unfo structure ready
 	info.fd = sock;
 	info.configuration = configuration;
-	info.client_addr = client_addr;
+	info.client_addr = (struct sockaddr_storage *) client_addr;
+	// spawn the control thread
 	if ((pthread_create(&control_thread, NULL,
 		&controlRoutine, &info)) != 0)
 		err(1, "Error while creating thread.");
 	pthread_join(control_thread, NULL);
-	printf("Closed connection with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
+	// final cleanup
+	sprintf(msg, "Closed connection with address '%s' on port %d.\n",
+		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port); //sestky
+	logReport(msg);
 	close(sock);
+	free(client_addr);
 	return (0);
 }

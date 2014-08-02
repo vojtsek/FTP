@@ -3,6 +3,8 @@
 
 #define PATH_LENGTH 256
 #define USER_LENGTH 32
+#define DIR_LENGTH 32
+#define STR_LENGTH 256
 #define DEBUG
 #ifdef DEBUG
 #define REP(WHAT) printf("%s\n", WHAT); fflush(stdout);
@@ -36,5 +38,11 @@ int getFullPath(char *, struct state *, struct config *, char *);
 
 int getHostIp(char *, struct in_addr *);
 
+int im2as(char *, char *, int);
+
+int as2im(char *, char *, int);
+
 short spawnConnection(struct state *, int *);
+
+int listDir(char *, char*);
 #endif

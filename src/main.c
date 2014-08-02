@@ -4,6 +4,10 @@
 #include "../headers/networking.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <err.h>
+#include <unistd.h>
+#include <errno.h>
+
 
 int main(int argc, char **argv) {
 
@@ -11,9 +15,12 @@ int main(int argc, char **argv) {
 	struct config configuration;
 	readConfiguration(&configuration, argc, argv);
 	printConfiguration(&configuration);
-
-	// create a socket and star listening
+	if(chroot(ROOT_DIR) == -1){
+		err(1, "Change root failed.");
+	}
+	// create a socket and start listening
 	startServer(&configuration);
+	// do cleanup
 	free(configuration.listen_on);
 	free(configuration.root_dir);
 	free(configuration.user_db);
