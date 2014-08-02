@@ -33,9 +33,9 @@ char readWord(int fd, char *word) {
 	return (c);
 }
 
-void freeCmd(struct cmd *command){
+void freeCmd(struct cmd *command) {
 	char **params = command->params;
-	while(*params != NULL)
+	while (*params != NULL)
 		free(*(params++));
 	free(command->params);
 }
@@ -53,28 +53,32 @@ int readCmd(int fd, struct cmd *command) {
 	while (1) {
 		command->params[i] = NULL;
 		if (r == '\r') {
-			if (read(fd, &c, 1) != 1){
+			if (read(fd, &c, 1) != 1) {
 				freeCmd(command);
 				return (-1);
 			}
-			if (c == '\n') break; // \r\n sequence
+			if (c == '\n')
+			break; // \r\n sequence
 		}
-		if (r == '\n') break;
+		if (r == '\n')
+			break;
 		// read another parameter
 		command->params[i] = (char *) malloc(256 * sizeof (char));
-		if ((r = readWord(fd, command->params[i])) == 0){
+		if ((r = readWord(fd, command->params[i])) == 0) {
 			freeCmd(command);
 			return (-1);
 		}
 		++i;
-		if (i == MAX_CMD_PARAMS) break;
+		if (i == MAX_CMD_PARAMS)
+			break;
 	}
 	// returns number of read parameters
 	return (i);
 }
 
 // executes command
-int executeCmd(struct cmd *command, short *abor, int fd, struct state *cstate,struct config *configuration) {
+int executeCmd(struct cmd *command, short *abor, int fd,
+	struct state *cstate, struct config *configuration) {
 	// loads the pointer to the apropriate function
 	initCmd(command, &user_cmd);
 	// calls it
@@ -89,10 +93,13 @@ int executeCmd(struct cmd *command, short *abor, int fd, struct state *cstate,st
 }
 
 // spwans the thread to control the data connection
-int spawnDataRoutine(struct state *cstate, struct config *configuration, int* sock){
-	struct data_info *info = (struct data_info *) malloc(sizeof(struct data_info));
+int spawnDataRoutine(struct state *cstate,
+	struct config *configuration, int *sock) {
+	struct data_info *info = (struct data_info *)
+	malloc(sizeof (struct data_info));
 	char name[32];
-	sprintf(name, "control_sockets/%scsk%d", cstate->dir, cstate->transfer_count);
+	sprintf(name, "/control_sockets/%scsk%d", cstate->dir,
+		cstate->transfer_count);
 	int sck;
 	struct sockaddr_un sa;
 	pthread_t data_thread;
@@ -101,6 +108,7 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 	// for communicating between the control and data thread
 	unlink(name);
 	bzero(&sa, sizeof (sa));
+	printf("%s\n", name);
 	strncpy(sa.sun_path, name, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
 
@@ -108,11 +116,11 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 		perror("Error creating control socket.");
 		return (-1);
 	}
-	if (bind(sck, (struct sockaddr *) &sa, sizeof (sa)) == -1){
+	if (bind(sck, (struct sockaddr *) &sa, sizeof (sa)) == -1) {
 		perror("Error binding control socket.");
 		return (-1);
 	}
-	if (listen(sck, SOMAXCONN) == -1){
+	if (listen(sck, SOMAXCONN) == -1) {
 		perror("Error listening on control socket.");
 		return (-1);
 	}
@@ -126,14 +134,14 @@ int spawnDataRoutine(struct state *cstate, struct config *configuration, int* so
 	info->client_addr = &(cstate->client_addr);
 	// spawns the thread
 	if ((pthread_create(&data_thread, NULL,
-		&dataRoutine, info)) != 0){
+		&dataRoutine, info)) != 0) {
 		perror("Error while creating thread.");
 		return (-1);
 	}
 	cstate->data_thread = data_thread;
 	// waits until the spawned thread makes the connection
 	// file descriptor to the connection is saved
-	if ((*sock = accept(sck, NULL, 0)) == -1){
+	if ((*sock = accept(sck, NULL, 0)) == -1) {
 		perror("Error accepting connection on control socket.");
 		return (-1);
 	}
@@ -159,11 +167,10 @@ void *controlRoutine(void *arg) {
 		.client_addr = *(info->client_addr) };
 	sprintf(cstate.dir, "%d", (int)now);
 	short abor = 0;
-	if(isDir("control_sockets") == -1)
-		mkdir("control_sockets", 0755);
+	if (isDir("/control_sockets") == -1)
+		mkdir("/control_sockets", 0755);
 	// reads commands from the accepted connection and executes it
 	while (readCmd(fd, &command) != -1) {
-		printf("%s\n", command.name);
 		executeCmd(&command, &abor, fd, &cstate, info->configuration);
 		freeCmd(&command);
 		if (abor) break;
@@ -172,7 +179,7 @@ void *controlRoutine(void *arg) {
 }
 
 // function running in separate thread, handles data connection
-void *dataRoutine(void *arg){
+void *dataRoutine(void *arg) {
 	struct data_info *info = (struct data_info *) arg;
 	int sck;
 	struct sockaddr_un sa;
@@ -183,7 +190,8 @@ void *dataRoutine(void *arg){
 	strncpy(sa.sun_path, info->control_sock, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
 
-	// tries to create a connection for communicating with the control thread
+	// tries to create a connection
+	// for communicating with the control thread
 	if ((sck = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating control socket.");
 		return (arg);
@@ -195,10 +203,10 @@ void *dataRoutine(void *arg){
 	struct cmd command;
 	cstate.data_sock = 0;
 	// reads commands from control thread and executes them
-	while(1){
+	while (1) {
 		// printf("Data socket: %d\n", cstate.data_sock);
 		readUntil(command.name, sck, 0);
-		if(command.name[0] == 'Q'){
+		if (command.name[0] == 'Q') {
 			printf("Q\n");
 			break;
 		}
@@ -207,7 +215,7 @@ void *dataRoutine(void *arg){
 		info->cstate->data_sock = cstate.data_sock;
 		info->cstate->last_accepted = cstate.last_accepted;
 	}
-	if(cstate.data_sock)
+	if (cstate.data_sock)
 		close(cstate.data_sock);
 	free(info);
 	return (arg);

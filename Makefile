@@ -15,6 +15,7 @@ $(BIN_DIR)run: $(BIN_DIR)main.o $(BIN_DIR)errors.o $(BIN_DIR)common.o $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)run $(^) $(LDFLAGS)
 
 $(BIN_DIR)main.o: $(SRC_DIR)main.c $(HEADER_DIR)conf.h $(HEADER_DIR)errors.h $(HEADER_DIR)common.h $(HEADER_DIR)structures.h $(HEADER_DIR)commands.h
+	[ ! -d bin ] && mkdir bin; true
 	$(call make_obj,main)
 
 $(BIN_DIR)errors.o: $(SRC_DIR)errors.c

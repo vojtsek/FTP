@@ -39,10 +39,12 @@ int startServer(struct config *configuration) {
 	bzero(peer_addr, psize);
 	in.sin_family = AF_INET;
 	in.sin_port = htons(configuration->ctrl_port);
+	if (inet_pton(AF_INET, configuration->listen_on,
+		&(in.sin_addr)) == -1)
+		err(1, "Problem occured while creating the socket.");
 	// bzero(&in6.sin6_addr.s6_addr, 16);
 	// open main listening stream socket, IPv6, TCP
 	if ((sock = socket(AF_INET, SOCK_STREAM, 6)) == -1)
-
 		err(1, "Problem occured while creating the socket.");
 
 	// make the used port reusable immediately
@@ -86,7 +88,7 @@ int startServer(struct config *configuration) {
 // handles the accepted control connection
 int runInstance(struct config *configuration,
 	struct sockaddr *client_addr, int sock) {
-	char numeric_addr[INET_ADDRSTRLEN]; //inet6
+	char numeric_addr[INET_ADDRSTRLEN];
 	char cmd[256];
 	char msg[128];
 	pthread_t control_thread;
@@ -95,10 +97,10 @@ int runInstance(struct config *configuration,
 	bzero(cmd, 256);
 
 	inet_ntop(((struct sockaddr_storage *)client_addr)->ss_family,
-		&(((struct sockaddr_in *)client_addr)->sin_addr.s_addr), //sestky
+		&(((struct sockaddr_in *)client_addr)->sin_addr.s_addr),
 		numeric_addr, sizeof (numeric_addr));
 	sprintf(msg, "Connected peer with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port); //sestky
+		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port);
 	logReport(msg);
 	respond(sock, 2, 2, 0, "Service ready");
 	// make the unfo structure ready
@@ -112,7 +114,7 @@ int runInstance(struct config *configuration,
 	pthread_join(control_thread, NULL);
 	// final cleanup
 	sprintf(msg, "Closed connection with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port); //sestky
+		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port);
 	logReport(msg);
 	close(sock);
 	free(client_addr);
