@@ -29,6 +29,7 @@ int getHostIp(char *, struct in_addr *);
 int im2as(char *, char *, int);
 int as2im(char *, char *, int);
 short spawnConnection(struct state *, int *);
+void doCleanup(struct config *);
 int listDir(char *, char*);
 int rmrDir(char *);
 #endif

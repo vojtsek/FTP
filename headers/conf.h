@@ -4,7 +4,7 @@
 #define	CTRL_PORT 1038
 #define	DATA_PORT 20
 #define	MAX_CONNS 10
-#define	LISTEN_ON "127.0.0.1"
+#define	LISTEN_ON "::ffff:127.0.0.1"
 #define	USER_DB "/users.db"
 #define	ROOT_DIR "/home/vojcek/FTP"
 #define DATA_DIR "/DATA"

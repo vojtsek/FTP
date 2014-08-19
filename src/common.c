@@ -372,3 +372,10 @@ int rmrDir(char *dir) {
 	rmdir(dir);
 	return (0);
 }
+
+void doCleanup(struct config *configuration){
+	free(configuration->listen_on);
+	free(configuration->root_dir);
+	free(configuration->user_db);
+	rmrDir("/control_sockets");
+}

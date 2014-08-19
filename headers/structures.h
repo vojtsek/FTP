@@ -33,9 +33,10 @@ struct cmd {
 };
 
 struct control_info {
-	int fd;
+	int fd, end;
 	struct config *configuration;
 	struct sockaddr_storage *client_addr;
+
 };
 
 struct data_info {

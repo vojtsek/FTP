@@ -9,17 +9,14 @@
 #include <err.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 
 // initialize configuration
 struct config configuration;
-
+signaled = 0;
 void
 sig_handler(int s) {
-	free(configuration.listen_on);
-	free(configuration.root_dir);
-	free(configuration.user_db);
-	rmrDir("/control_sockets");
-	exit(0);
+	signaled = 1;
 }
 
 int main(int argc, char **argv) {

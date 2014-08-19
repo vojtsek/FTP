@@ -108,7 +108,7 @@ int spawnDataRoutine(struct state *cstate,
 	// for communicating between the control and data thread
 	unlink(name);
 	bzero(&sa, sizeof (sa));
-	printf("%s\n", name);
+	// printf("%s\n", name);
 	strncpy(sa.sun_path, name, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
 
@@ -171,10 +171,12 @@ void *controlRoutine(void *arg) {
 		mkdir("/control_sockets", 0755);
 	// reads commands from the accepted connection and executes it
 	while (readCmd(fd, &command) != -1) {
+		printf("reading..\n");
 		executeCmd(&command, &abor, fd, &cstate, info->configuration);
 		freeCmd(&command);
 		if (abor) break;
 	}
+	info->end = 1;
 	return (arg);
 }
 
