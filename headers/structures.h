@@ -18,7 +18,7 @@ struct state {
 	char path[256];
 	char dir[32];
 	size_t data_port, transfer_count;
-	int data_sock, control_sock, port, last_accepted;
+	int data_sock, control_sock, port, last_accepted, addr_family;
 	pthread_t data_thread;
 	transfer_t transfer_type;
 	struct sockaddr_storage client_addr;

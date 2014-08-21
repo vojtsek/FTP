@@ -13,7 +13,8 @@
 
 // initialize configuration
 struct config configuration;
-signaled = 0;
+int signaled = 0;
+
 void
 sig_handler(int s) {
 	signaled = 1;

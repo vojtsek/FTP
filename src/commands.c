@@ -68,7 +68,6 @@ void user(char **params, short *abor, int fd,
 		break;
 		// user exists
 		case 0:
-			printf("%s\n", "ok");
 			respond(fd, 3, 3, 1, "OK, awaiting password.");
 		break;
 		// user does not exist
@@ -116,14 +115,12 @@ void paswd(char **params, short *abor, int fd,
 	if (strcmp(params[0], correct_passwd) == 0) {
 		respond(fd, 2, 3, 0, "User logged in.");
 		changeDir(configuration->root_dir, cstate->user);
-		printf("%s\n", configuration->root_dir);
 		cstate->logged = 1;
 		return;
 	}
 	// wrong password
 	char str[USER_LENGTH];
 	sprintf(str, "User %s failed to login: Wrong password.", cstate->user);
-	logReport(str);
 	respond(fd, 4, 0, 0, "Wrong password.");
 }
 
@@ -377,6 +374,64 @@ void port(char **params, short *abor, int fd,
 		write(cstate->control_sock, "Q\0", 2);
 		cstate->control_sock = 0;
 	}
+	cstate->addr_family = 1;
+	respond(fd, 2, 0, 0, "Port changed.");
+}
+
+// sets the communication port and IP adress server should connect to - extended version
+void eprt(char **params, short *abor, int fd,
+	struct state *cstate, struct config *configuration) {
+	if (params[0] == NULL) {
+		respond(fd, 5, 0, 4, "Need address and port.");
+		return;
+	}
+	char ip_str[STR_LENGTH], buf[STR_LENGTH];
+	char *del, *n_del, del_char;
+	bzero(&(cstate->client_addr), sizeof (cstate->client_addr));
+	int port, family;
+
+	// parse the parameter
+	del_char = params[0][0];
+	del = strchr(params[0], del_char);
+	strncpy(buf, del + 1, 1);
+	buf[1] = '\0';
+	family = atoi(buf);
+	del = strchr(del + 1, del_char);
+	n_del = strchr(del + 1, del_char);
+	strncpy(ip_str, del + 1, n_del - del - 1);
+	ip_str[n_del - del - 1] = '\0';
+	del = n_del;
+	n_del = strchr(del + 1, del_char);
+	strncpy(buf, del + 1, n_del - del - 1);
+	buf[n_del - del - 1] = '\0';
+	port = atoi(buf);
+	if (family == 1) { // IPv4
+		struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
+		// converts the IP address
+		if (inet_pton(AF_INET, ip_str, &(in->sin_addr)) == -1) {
+			respond(fd, 5, 0, 1, "Invalid address.");
+			return;
+		}
+		// sets proper values and saves it in the cstate structure
+		in->sin_port = htons(port);
+		in->sin_family = AF_INET;
+	} else if (family == 2) { // IPv6
+		struct sockaddr_in6 *in = (struct sockaddr_in6 *) &(cstate->client_addr);
+		// converts the IP address
+		if (inet_pton(AF_INET6, ip_str, &(in->sin6_addr)) == -1) {
+			respond(fd, 5, 0, 1, "Invalid address.");
+			return;
+		}
+		// sets proper values and saves it in the cstate structure
+		in->sin6_port = htons(port);
+		in->sin6_family = AF_INET6;
+	}
+	if (cstate->control_sock) {
+		write(cstate->control_sock, "Q\0", 2);
+		cstate->control_sock = 0;
+	}
+	cstate->port = 1;
+	cstate->addr_family = family;
 	respond(fd, 2, 0, 0, "Port changed.");
 }
 
@@ -386,6 +441,7 @@ void list(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	int retcode;
 	// connection was not initialized yet
+	++cstate->transfer_count;
 	if (!cstate->control_sock) {
 		if (spawnDataRoutine(cstate, configuration,
 			&(cstate->control_sock)) == -1) {
@@ -397,7 +453,6 @@ void list(char **params, short *abor, int fd,
 		respond(fd, 5, 0, 3, "Bad command sequence.");
 		return;
 	}
-	++cstate->transfer_count;
 	// invokes the DLIST command; gives the path
 	write(cstate->control_sock, "DLIST\0", 6);
 	write(cstate->control_sock, cstate->path, strlen(cstate->path));
@@ -453,7 +508,7 @@ void d_list(char **params, short *abor, int fd,
 // sets the passive mode - client part
 void pasv(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
-	int sock, i = 0;
+	int resp, i = 0;
 	char c, buf[64], msg[128];
 
 	if (cstate->control_sock && cstate->port) {
@@ -472,6 +527,11 @@ void pasv(char **params, short *abor, int fd,
 	}
 	// invokes the DPASV command
 	write(cstate->control_sock, "DPASV\0", 6);
+	read(cstate->control_sock, &resp, sizeof (int));
+	if (resp == 5) {
+		respond(fd, 5, 0, 1, "Internal server error");
+		return;
+	}
 	// reads the port and IP adress and port
 	// the data transfer process stated to listen on
 	while (read(cstate->control_sock, &c, 1) > 0) {
@@ -487,10 +547,44 @@ void pasv(char **params, short *abor, int fd,
 	respond(fd, 2, 2, 7, msg);
 }
 
+void epsv(char **params, short *abor, int fd,
+	struct state *cstate, struct config *configuration) {
+	int port = 0;
+	char msg[128];
+
+	if (cstate->control_sock && cstate->port) {
+		// terminate the spawned thread for active transfer
+		write(cstate->control_sock, "Q\0", 2);
+		cstate->control_sock = 0;
+		cstate->port = 0;
+	}
+	// data transfer process was not spawned yet
+	if (!cstate->control_sock) {
+		if (spawnDataRoutine(cstate, configuration,
+			&(cstate->control_sock)) == -1) {
+			respond(fd, 4, 5, 1, "Internal server error.");
+			return;
+		}
+	}
+	// invokes the DPASV command
+	write(cstate->control_sock, "DEPSV\0", 6);
+	// reads the port and IP adress and port
+	// the data transfer process stated to listen on
+	read(cstate->control_sock, &port, sizeof (int));
+	if (port == 5) {
+		respond(fd, 5, 0, 1, "Internal server error");
+		return;
+	}
+	read(cstate->control_sock, &port, sizeof (int));
+	// informs the client
+	sprintf(msg, "OK, entering extended passive mode (|||%d|).", port);
+	respond(fd, 2, 2, 9, msg);
+}
+
 // sets the passive mode - data part
 void d_pasv(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
-	int newsock, port, optval = 1;
+	int newsock, port, retcode, optval = 1;
 	struct sockaddr_in in;
 	bzero(&in, sizeof (in));
 	char ip[INET_ADDRSTRLEN], msg[STR_LENGTH];
@@ -499,26 +593,37 @@ void d_pasv(char **params, short *abor, int fd,
 	port = 30000;
 	in.sin_family = AF_INET;
 	// gets the IP adress tthe OS provides
-	strcpy(ip, configuration->listen_on);
+	strcpy(ip, configuration->listen_on + 7);
 	if (inet_pton(AF_INET, ip, &(in.sin_addr)) == -1) {
-		respond(fd, 5, 0, 1, "Invalid address.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
 		return;
 	}
 	in.sin_port = htons(port);
 	// server already listens - abort
 	if (cstate->data_sock) {
 		close(cstate->data_sock);
+		// shutdown(cstate->data_sock, SHUT_RDWR);
 		cstate->data_sock = 0;
 	}
 	// create new socket
 	if ((newsock = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
 		perror("Error creating data socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
 		return;
 	}
 	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
-		&optval, sizeof (optval)) == -1)
-		err(1, "Problem occured while creating the socket.");
-
+		&optval, sizeof (optval)) == -1) {
+		perror("Problem occured while creating the socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	errno = 0;
 	// tries to bind to different ports
 	while ((bind(newsock, (struct sockaddr *) &in,
 		sizeof (in)) == -1) && (errno == EADDRINUSE)) {
@@ -529,17 +634,97 @@ void d_pasv(char **params, short *abor, int fd,
 	}
 	if (errno) {
 		perror("Error binding data socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
 		return;
 	}
 	if (listen(newsock, SOMAXCONN) == -1) {
 		perror("Error listening on control socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
 		return;
 	}
 	// writes info about new IP address and socket to the control thread
 	sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
+	retcode = 2;
+	write(fd, &retcode, sizeof (int));
 	write(fd, msg, strlen(msg) + 1);
 	cstate->data_sock = newsock;
-	REP("Awaiting connection...");
+	cstate->addr_family = 1;
+}
+
+void d_epsv(char **params, short *abor, int fd,
+	struct state *cstate, struct config *configuration) {
+	int newsock, port, retcode, optval = 1;
+	struct sockaddr_in6 in;
+	bzero(&in, sizeof (in));
+	char ip[INET6_ADDRSTRLEN];
+
+	// default new port
+	port = 30000;
+	in.sin6_family = AF_INET6;
+	// gets the IP adress the OS provides
+	strcpy(ip, configuration->listen_on);
+	if (inet_pton(AF_INET6, ip, &(in.sin6_addr)) == -1) {
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	// in.sin6_addr = in6addr_any;
+	in.sin6_port = htons(port);
+	// server already listens - abort
+	if (cstate->data_sock) {
+		close(cstate->data_sock);
+		cstate->data_sock = 0;
+	}
+	// create new socket
+	if ((newsock = socket(AF_INET6, SOCK_STREAM, 6)) == -1) {
+		perror("Error creating data socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
+		&optval, sizeof (optval)) == -1) {
+		perror("Problem occured while creating the socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	errno = 0;
+	// tries to bind to different ports
+	while ((bind(newsock, (struct sockaddr *) &in,
+		sizeof (in)) == -1) && (errno == EADDRINUSE)) {
+		if (++port > 32768)
+			break;
+		in.sin6_port = htons(port);
+		errno = 0;
+	}
+	if (errno) {
+		perror("Error binding data socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	if (listen(newsock, SOMAXCONN) == -1) {
+		perror("Error listening on data socket.");
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(newsock);
+		return;
+	}
+	// writes info about new IP address and socket to the control thread
+	retcode = 2;
+	write(fd, &retcode, sizeof (int));
+	write(fd, &port, sizeof (int));
+	cstate->data_sock = newsock;
+	cstate->addr_family = 2;
 }
 
 // retrieves the data from the server - control part
@@ -595,6 +780,7 @@ void d_retr(char **params, short *abor, int fd,
 	char filepath[128], buf[2 * BUFSIZE];
 	// accepts / connects to the client
 	if (spawnConnection(cstate, &accepted)) {
+		REP("AA");
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
 		return;

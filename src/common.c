@@ -235,26 +235,46 @@ int getHostIp(char *ip, struct in_addr *addr) {
 // the created socket in accepted
 short spawnConnection(struct state *cstate, int *accepted) {
 	*accepted = 0;
-	struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
-	char str[INET_ADDRSTRLEN];
 
-	inet_ntop(AF_INET, &(in->sin_addr), str, INET_ADDRSTRLEN);
-	REP(str);
-	if (!cstate->data_sock) {
-		if ((*accepted = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
-			perror("Error creating data socket.");
-			return (-1);
+	if (cstate->addr_family == 1) {
+		struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
+		char str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &(in->sin_addr), str, INET_ADDRSTRLEN);
+		if (!cstate->data_sock) {
+			if ((*accepted = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
+				perror("Error creating data socket.");
+				return (-1);
+			}
+			if ((connect(*accepted, (struct sockaddr *) in,
+				sizeof (struct sockaddr_in))) == -1) {
+				perror("Error connecting to data socket.");
+				return (-1);
+			}
+		} else {
+			if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1) {
+				perror("Error accepting connection on data socket.");
+				return (-1);
+			}
 		}
-		if ((connect(*accepted, (struct sockaddr *) in,
-			sizeof (struct sockaddr_in))) == -1) {
-			perror("Error connecting to data socket.");
-			return (-1);
-		}
-		REP("Connected!");
-	} else {
-		if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1) {
-			perror("Error accepting connection on data socket.");
-			return (-1);
+	} else if (cstate->addr_family == 2) {
+		struct sockaddr_in6 *in = (struct sockaddr_in6 *) &(cstate->client_addr);
+		char str[INET6_ADDRSTRLEN];
+		inet_ntop(AF_INET6, &(in->sin6_addr), str, INET6_ADDRSTRLEN);
+		if (!cstate->data_sock) {
+			if ((*accepted = socket(AF_INET6, SOCK_STREAM, 6)) == -1) {
+				perror("Error creating data socket.");
+				return (-1);
+			}
+			if ((connect(*accepted, (struct sockaddr *) in,
+				sizeof (struct sockaddr_in))) == -1) {
+				perror("Error connecting to data socket.");
+				return (-1);
+			}
+		} else {
+			if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1) {
+				perror("Error accepting connection on data socket.");
+				return (-1);
+			}
 		}
 	}
 	if (!(*accepted))
@@ -334,7 +354,6 @@ int listDir(char *dir, char *result) {
 		struct tm *timeinfo;
 	    timeinfo = localtime(&(finfo->st_mtim.tv_sec));
 	    if (!(strftime(tm, sizeof (tm), "%b %e %H:%M", timeinfo))) {
-			REP("strftime failed");
 			continue;
 	    }
 	    tm[12] = 0;

@@ -108,10 +108,8 @@ int spawnDataRoutine(struct state *cstate,
 	// for communicating between the control and data thread
 	unlink(name);
 	bzero(&sa, sizeof (sa));
-	// printf("%s\n", name);
 	strncpy(sa.sun_path, name, sizeof (sa.sun_path));
 	sa.sun_family = AF_UNIX;
-
 	if ((sck = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating control socket.");
 		return (-1);
@@ -162,6 +160,7 @@ void *controlRoutine(void *arg) {
 		.control_sock = 0,
 		.port = 1,
 		.last_accepted = 0,
+		.addr_family = 1,
 		.data_thread = 0,
 		.transfer_type = Image,
 		.client_addr = *(info->client_addr) };
@@ -171,7 +170,6 @@ void *controlRoutine(void *arg) {
 		mkdir("/control_sockets", 0755);
 	// reads commands from the accepted connection and executes it
 	while (readCmd(fd, &command) != -1) {
-		printf("reading..\n");
 		executeCmd(&command, &abor, fd, &cstate, info->configuration);
 		freeCmd(&command);
 		if (abor) break;
@@ -217,8 +215,9 @@ void *dataRoutine(void *arg) {
 		info->cstate->data_sock = cstate.data_sock;
 		info->cstate->last_accepted = cstate.last_accepted;
 	}
-	if (cstate.data_sock)
+	if (cstate.data_sock){
 		close(cstate.data_sock);
+	}
 	free(info);
 	return (arg);
 }
