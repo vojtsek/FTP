@@ -7,6 +7,11 @@ HEADER_DIR=headers/
 
 all: $(BIN_DIR)run
 
+clean:
+	rm $(BIN_DIR)*.o
+	rm $(BIN_DIR)run
+	rmdir $(BIN_DIR)
+
 define make_obj
 	$(CC) $(CFLAGS) -o $(BIN_DIR)$(1).o -c $(SRC_DIR)$(1).c
 endef

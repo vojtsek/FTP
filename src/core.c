@@ -19,7 +19,7 @@
 
 // reads word from the fd
 // the word is separated by white characters
-char readWord(int fd, char *word) {
+char readWord(int fd, char *word, size_t max) {
 	int r, i = 0;
 	char c = 0;
 	while (1) {
@@ -27,6 +27,10 @@ char readWord(int fd, char *word) {
 			break;
 		if (isWhite(c)) break;
 		word[i++] = c;
+		if (i == max){
+			printf("Word too long.\n");
+			return (0);
+		}
 	}
 	word[i] = 0;
 	// returns the white character which separated the world
@@ -43,12 +47,15 @@ void freeCmd(struct cmd *command) {
 // reads command from fd
 int readCmd(int fd, struct cmd *command) {
 	command->params = (char **)
-	malloc((MAX_CMD_PARAMS + 1) * sizeof (char *));
+	allocate((MAX_CMD_PARAMS + 1) * sizeof (char *));
 	int i = 0;
 	char c, r;
+	command->params[0] = NULL;
 	// reads command name
-	if ((r = readWord(fd, command->name)) == 0)
+	if ((r = readWord(fd, command->name, 256)) == 0) {
+		freeCmd(command);
 		return (-1);
+	}
 	// loads parametres
 	while (1) {
 		command->params[i] = NULL;
@@ -63,8 +70,8 @@ int readCmd(int fd, struct cmd *command) {
 		if (r == '\n')
 			break;
 		// read another parameter
-		command->params[i] = (char *) malloc(256 * sizeof (char));
-		if ((r = readWord(fd, command->params[i])) == 0) {
+		command->params[i] = (char *) allocate(256 * sizeof (char));
+		if ((r = readWord(fd, command->params[i], 256)) == 0) {
 			freeCmd(command);
 			return (-1);
 		}
@@ -80,7 +87,7 @@ int readCmd(int fd, struct cmd *command) {
 int executeCmd(struct cmd *command, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	// loads the pointer to the apropriate function
-	initCmd(command, &user_cmd);
+	initCmd(command, all_commands);
 	// calls it
 	if (command->func)
 		command->func(command->params, abor, fd, cstate, configuration);
@@ -96,9 +103,9 @@ int executeCmd(struct cmd *command, short *abor, int fd,
 int spawnDataRoutine(struct state *cstate,
 	struct config *configuration, int *sock) {
 	struct data_info *info = (struct data_info *)
-	malloc(sizeof (struct data_info));
+	allocate(sizeof (struct data_info));
 	char name[32];
-	sprintf(name, "/control_sockets/%scsk%d", cstate->dir,
+	snprintf(name, strlen(name), "/control_sockets/%scsk%d", cstate->dir,
 		cstate->transfer_count);
 	int sck;
 	struct sockaddr_un sa;
@@ -147,8 +154,7 @@ int spawnDataRoutine(struct state *cstate,
 }
 
 // function running in separate thread, handling data connection
-void *controlRoutine(void *arg) {
-	struct control_info *info = (struct control_info *) arg;
+int controlRoutine(struct control_info *info) {
 	int fd = info->fd;
 	struct cmd command;
 	time_t now = time(NULL);
@@ -164,7 +170,7 @@ void *controlRoutine(void *arg) {
 		.data_thread = 0,
 		.transfer_type = Image,
 		.client_addr = *(info->client_addr) };
-	sprintf(cstate.dir, "%d", (int)now);
+	snprintf(cstate.dir, strlen(cstate.dir), "%d", (int)now);
 	short abor = 0;
 	if (isDir("/control_sockets") == -1)
 		mkdir("/control_sockets", 0755);
@@ -174,8 +180,9 @@ void *controlRoutine(void *arg) {
 		freeCmd(&command);
 		if (abor) break;
 	}
-	info->end = 1;
-	return (arg);
+	if (errno == EINTR)
+		return (1);
+	return (0);
 }
 
 // function running in separate thread, handles data connection
@@ -205,7 +212,7 @@ void *dataRoutine(void *arg) {
 	// reads commands from control thread and executes them
 	while (1) {
 		// printf("Data socket: %d\n", cstate.data_sock);
-		readUntil(command.name, sck, 0);
+		readUntil(command.name, sck, 0, 256);
 		if (command.name[0] == 'Q') {
 			printf("Q\n");
 			break;

@@ -30,9 +30,9 @@ void readConfiguration(struct config *configuration, int argc, char **argv) {
 	configuration->ctrl_port = CTRL_PORT;
 	configuration->data_port = DATA_PORT;
 	configuration->max_conns = MAX_CONNS;
-	configuration->listen_on = (char *) malloc(256);
-	configuration->root_dir = (char *) malloc(256);
-	configuration->user_db = (char *) malloc(256);
+	configuration->listen_on = (char *) allocate(256);
+	configuration->root_dir = (char *) allocate(256);
+	configuration->user_db = (char *) allocate(256);
 	strcpy(configuration->listen_on, LISTEN_ON);
 	strcpy(configuration->root_dir, DATA_DIR);
 	strcpy(configuration->user_db, USER_DB);
@@ -60,10 +60,9 @@ void printConfiguration(struct config *configuration) {
 	printf("using configuration:\n\
 data port: %d\n\
 control port: %d\n\
-root directory: %s\n\
 data directory: %s\n",
 configuration->data_port, configuration->ctrl_port,
-ROOT_DIR, configuration->root_dir);
+configuration->root_dir);
 }
 
 // reports the message
@@ -126,11 +125,15 @@ short isFileOk(char *fn) {
 }
 
 // reads from fd until sep character or end appears
-int readUntil(char *buf, int fd, char sep) {
+int readUntil(char *buf, int fd, char sep, size_t max) {
 	char c = 0;
 	// read...
 	while ((read(fd, &c, 1) > 0) && (c != sep)) {
 		(*buf++) = c;
+		if (!(--max)) {
+			printf("Too long string to read.\n");
+			return (-1);
+		}
 	}
 	// terminating zero
 	if (c == sep) {
@@ -146,15 +149,15 @@ int readUntil(char *buf, int fd, char sep) {
 
 // reads the database specified by path and searches for username
 // if found, returns nonzero and passwd
-int lookupUser(char *path, char *username, char *passwd) {
-	char user[64], pswd[64];
+int lookupUser(char *path, char *username, char *passwd, size_t max) {
+	char user[64], pswd[max];
 	user[0] = pswd[0] = 0;
 	int fd, res = 1;
 	if ((fd = open(path, O_RDONLY)) == -1)
 		return (-1);
 	// reads username and password
-	while ((readUntil(user, fd, ':')) != -1) {
-		if (readUntil(pswd, fd, '\n') == -1) {
+	while ((readUntil(user, fd, ':', 64)) != -1) {
+		if (readUntil(pswd, fd, '\n', 64) == -1) {
 			res = 1;
 			break;
 		}
@@ -217,7 +220,7 @@ int getHostIp(char *ip, struct in_addr *addr) {
 			&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 			inet_ntop(AF_INET, tmpAddrPtr, ip, INET_ADDRSTRLEN);
 			if (strcmp(ip, "127.0.0.1") != 0) {
-				sprintf(msg, "Using interface %s",
+				snprintf(msg, strlen(msg), "Using interface %s",
 					ifa->ifa_name);
 				break;
 			}
@@ -323,12 +326,22 @@ void loadPerms(short perms, char *r, char *w, char *x) {
 		*x = 'x';
 }
 
+void *allocate(size_t size) {
+	void *ret;
+	ret = malloc(size);
+	if (ret == NULL) {
+		err(1, "Malloc failed.");
+	}
+	return (ret);
+}
+
 int listDir(char *dir, char *result) {
 	DIR *d;
 	struct dirent *entry = (struct dirent *)
-	malloc(sizeof (struct dirent));
+	allocate(sizeof (struct dirent));
+
 	struct stat *finfo = (struct stat *)
-	malloc(sizeof (struct stat));
+	allocate(sizeof (struct stat));
 	char line[STR_LENGTH], path[PATH_LENGTH], mode[11], tm[13];
 
 
@@ -338,7 +351,7 @@ int listDir(char *dir, char *result) {
 		if ((strcmp(entry->d_name, ".") == 0) ||
 			(strcmp(entry->d_name, "..") == 0))
 			continue;
-		sprintf(path, "%s/%s", dir, entry->d_name);
+		snprintf(path, strlen(path), "%s/%s", dir, entry->d_name);
 		if (stat(path, finfo))
 			continue;
 		memset(mode, '-', 10);
@@ -357,7 +370,7 @@ int listDir(char *dir, char *result) {
 			continue;
 	    }
 	    tm[12] = 0;
-		sprintf(line, "%s %d %s %s %d %s %s\n", mode, 1,
+		snprintf(line, strlen(line), "%s %d %s %s %d %s %s\n", mode, 1,
 			"FTP", "FTP", (int) finfo->st_size, tm, entry->d_name);
 		strcpy(result, line);
 		result += strlen(line);
@@ -379,7 +392,7 @@ int rmrDir(char *dir) {
 		if ((strcmp(entry->d_name, ".") == 0) ||
 			(strcmp(entry->d_name, "..") == 0))
 			continue;
-		sprintf(abs_fn, "%s/%s", dir, entry->d_name);
+		snprintf(abs_fn, strlen(abs_fn), "%s/%s", dir, entry->d_name);
 		if ((t = opendir(abs_fn))) {
 			closedir(t);
 			rmrDir(abs_fn);

@@ -18,15 +18,14 @@
 #include <strings.h> // bzero
 #include <err.h>
 #include <errno.h>
-#include <stropts.h>
 
 // iterate through command functions
 // and assigns the apropriate function to the given command
-void initCmd(struct cmd *command, struct cmd_function *f) {
-	struct cmd_function *func;
-	for (func = f; func != NULL; func = func->next) {
-		if (strcasecmp(command->name, func->name) == 0) {
-			command->func = func->func;
+void initCmd(struct cmd *command, struct cmd_function all_commands[]) {
+	int i;
+	for (i = 0; i < CMD_COUNT; ++i) {
+		if (strcasecmp(command->name, all_commands[i].name) == 0) {
+			command->func = all_commands[i].func;
 			break;
 		}
 		else
@@ -60,7 +59,7 @@ void user(char **params, short *abor, int fd,
 		respond(fd, 5, 0, 4, "Require username.");
 		return;
 	}
-	switch (lookupUser(configuration->user_db, params[0], NULL)) {
+	switch (lookupUser(configuration->user_db, params[0], NULL, 0)) {
 		// some error occured while reading the database
 		case -1:
 			respond(fd, 4, 5, 1, "Internal server error.");
@@ -107,7 +106,7 @@ void paswd(char **params, short *abor, int fd,
 	char correct_passwd[USER_LENGTH];
 	// error occured...
 	if (lookupUser(configuration->user_db,
-		cstate->user, correct_passwd) == -1) {
+		cstate->user, correct_passwd, USER_LENGTH) == -1) {
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
@@ -120,7 +119,7 @@ void paswd(char **params, short *abor, int fd,
 	}
 	// wrong password
 	char str[USER_LENGTH];
-	sprintf(str, "User %s failed to login: Wrong password.", cstate->user);
+	snprintf(str, strlen(str), "User %s failed to login: Wrong password.", cstate->user);
 	respond(fd, 4, 0, 0, "Wrong password.");
 }
 
@@ -200,7 +199,7 @@ void mkd(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	sprintf(response, "Directory %s created.", fpath);
+	snprintf(response, strlen(response), "Directory %s created.", fpath);
 	respond(fd, 2, 5, 7, response);
 }
 
@@ -228,7 +227,7 @@ void rmd(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	sprintf(response, "Directory %s removed.", fpath);
+	snprintf(response, strlen(response), "Directory %s removed.", fpath);
 	respond(fd, 2, 5, 0, response);
 }
 
@@ -256,7 +255,7 @@ void dele(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	sprintf(response, "File %s removed.", fpath);
+	snprintf(response, strlen(response), "File %s removed.", fpath);
 	respond(fd, 2, 5, 0, response);
 }
 
@@ -486,7 +485,7 @@ void d_list(char **params, short *abor, int fd,
 		return;
 	}
 	// read path to dir from the control thread
-	readUntil(dir, fd, 0);
+	readUntil(dir, fd, 0, 32);
 	// join the path
 	if (getFullPath(path, cstate, configuration, dir) == -1) {
 		retcode = 5;
@@ -511,6 +510,11 @@ void pasv(char **params, short *abor, int fd,
 	int resp, i = 0;
 	char c, buf[64], msg[128];
 
+	struct sockaddr_in in;
+	int size = sizeof (in);
+	getsockname(fd, &in, size );
+	inet_ntop(AF_INET, &in, buf, 64);
+	printf("%s\n", buf);
 	if (cstate->control_sock && cstate->port) {
 		// terminate the spawned thread for active transfer
 		write(cstate->control_sock, "Q\0", 2);
@@ -543,7 +547,7 @@ void pasv(char **params, short *abor, int fd,
 			break;
 	}
 	// informs the client
-	sprintf(msg, "OK, entering passive mode (%s).", buf);
+	snprintf(msg, strlen(msg), "OK, entering passive mode (%s).", buf);
 	respond(fd, 2, 2, 7, msg);
 }
 
@@ -577,7 +581,7 @@ void epsv(char **params, short *abor, int fd,
 	}
 	read(cstate->control_sock, &port, sizeof (int));
 	// informs the client
-	sprintf(msg, "OK, entering extended passive mode (|||%d|).", port);
+	snprintf(msg, strlen(msg), "OK, entering extended passive mode (|||%d|).", port);
 	respond(fd, 2, 2, 9, msg);
 }
 
@@ -647,7 +651,7 @@ void d_pasv(char **params, short *abor, int fd,
 		return;
 	}
 	// writes info about new IP address and socket to the control thread
-	sprintf(msg, "%s,%d,%d", ip, (port / 256), (port % 256));
+	snprintf(msg, strlen(msg), "%s,%d,%d", ip, (port / 256), (port % 256));
 	retcode = 2;
 	write(fd, &retcode, sizeof (int));
 	write(fd, msg, strlen(msg) + 1);
@@ -777,7 +781,7 @@ void retr(char **params, short *abor, int fd,
 void d_retr(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	int accepted, retcode, file, r, subn = 0;
-	char filepath[128], buf[2 * BUFSIZE];
+	char filepath[PATH_LENGTH], buf[2 * BUFSIZE];
 	// accepts / connects to the client
 	if (spawnConnection(cstate, &accepted)) {
 		REP("AA");
@@ -786,7 +790,7 @@ void d_retr(char **params, short *abor, int fd,
 		return;
 	}
 	// loads filepath of the given file
-	readUntil(filepath, fd, 0);
+	readUntil(filepath, fd, 0, PATH_LENGTH);
 	// check the file status
 	if (isFileOk(filepath) == -1) {
 		retcode = 5;
@@ -899,7 +903,7 @@ void d_stor(char **params, short *abor, int fd,
 		return;
 	}
 	// reads the filepath from the ctrl thread
-	readUntil(filepath, fd, 0);
+	readUntil(filepath, fd, 0, PATH_LENGTH);
 	// if (isFileOk(filepath) == -1){
 	// 	retcode = 5;
 	// 	write(fd, &retcode, sizeof (int));

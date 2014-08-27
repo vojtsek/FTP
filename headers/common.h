@@ -18,12 +18,13 @@
 void readConfiguration(struct config *, int, char **);
 void printConfiguration(struct config *);
 void logReport(char *msg);
+void *allocate(size_t size);
 short isWhite(char);
 char *changeDir(char *, char *);
 short isDir(char *);
 short isFileOk(char *);
-int lookupUser(char *, char *, char *);
-int readUntil(char*, int, char);
+int lookupUser(char *, char *, char *, size_t max);
+int readUntil(char*, int, char, size_t max);
 int getFullPath(char *, struct state *, struct config *, char *);
 int getHostIp(char *, struct in_addr *);
 int im2as(char *, char *, int);

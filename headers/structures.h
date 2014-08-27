@@ -33,7 +33,7 @@ struct cmd {
 };
 
 struct control_info {
-	int fd, end;
+	int fd;
 	struct config *configuration;
 	struct sockaddr_storage *client_addr;
 
@@ -51,7 +51,6 @@ struct data_info {
 };
 
 struct cmd_function {
-	struct cmd_function *next;
 	cmd_fnc func;
 	char name[256];
 };

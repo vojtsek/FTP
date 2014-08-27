@@ -6,7 +6,6 @@
 #define	MAX_CONNS 10
 #define	LISTEN_ON "::ffff:127.0.0.1"
 #define	USER_DB "/users.db"
-#define	ROOT_DIR "/home/vojcek/FTP"
 #define DATA_DIR "/DATA"
 #define	MAX_CMD_PARAMS 15
 #define UID 1000

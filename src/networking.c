@@ -9,15 +9,17 @@
 #include <unistd.h> // fork
 #include <pthread.h>
 #include <arpa/inet.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
+#include <errno.h>
+#include <wait.h>
 
 // initiate the server to the listening state
 int startServer(struct config *configuration) {
 	size_t sock, newsock, psize, optval = 1;
-	pid_t pid;
+	pid_t pid, chpid;
+	int status;
 	struct sockaddr_in6 in6;
 	psize = sizeof (struct sockaddr);
 	struct sockaddr peer_addr;
@@ -31,7 +33,7 @@ int startServer(struct config *configuration) {
 	// open main listening stream socket, IPv6, TCP
 	// struct sockaddr_in in;
 	// psize = sizeof (struct sockaddr);
-	// struct sockaddr *peer_addr = (struct sockaddr *) malloc(psize);
+	// struct sockaddr *peer_addr = (struct sockaddr *) allocate(psize);
 	// bzero(&in, sizeof (in));
 
 	// initialize option
@@ -42,6 +44,7 @@ int startServer(struct config *configuration) {
 		&(in6.sin6_addr)) == -1)
 		err(1, "Problem occured while creating the socket.");
 	bzero(&in6.sin6_addr.s6_addr, 16);
+	in6.sin6_addr.s6_addr[0] = 0;
 	// open main listening stream socket, IPv6, TCP
 	if ((sock = socket(AF_INET6, SOCK_STREAM, 6)) == -1)
 		err(1, "Problem occured while creating the socket.");
@@ -68,12 +71,12 @@ int startServer(struct config *configuration) {
 	// O_NONBLOCK not set, so accept shall block while waiting for the peer
 	for (;;) {
 		if ((newsock = accept(sock,
-			&peer_addr, &psize)) == -1){
-			perror("Accepting the connection failed.");
-			if (signaled){
-				doCleanup(configuration);
-				exit(0);
-			}
+			&peer_addr, &psize)) == -1) {
+			if (errno != EINTR)
+				perror("Accepting the connection failed.");
+
+			if (signaled)
+				break;
 		}
 		switch (pid = fork()) {
 			// child
@@ -90,9 +93,12 @@ int startServer(struct config *configuration) {
 				close(newsock);
 			break;
 		}
-		if (signaled){
+		// after the loop, so signal was delivered
+		// wait for all children
+		while ((chpid = wait(&status)) > 0);
+		if (signaled) {
 			doCleanup(configuration);
-			exit(0);
+			return (1);
 		}
 	}
 
@@ -103,41 +109,29 @@ int startServer(struct config *configuration) {
 int runInstance(struct config *configuration,
 	struct sockaddr *client_addr, int sock) {
 	char numeric_addr[INET6_ADDRSTRLEN];
-	char cmd[256];
 	char msg[128];
-	pthread_t control_thread;
+	int ret = 0;
 	struct control_info info;
 	bzero(numeric_addr, INET6_ADDRSTRLEN);
-	bzero(cmd, 256);
 
 	inet_ntop(((struct sockaddr_storage *)client_addr)->ss_family,
 		&(((struct sockaddr_in6 *)client_addr)->sin6_addr.s6_addr),
 		numeric_addr, sizeof (numeric_addr));
-	sprintf(msg, "Connected peer with address '%s' on port %d.\n",
+	snprintf(msg, strlen(msg), "Connected peer with address '%s' on port %d.\n",
 		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port);
 	logReport(msg);
 	respond(sock, 2, 2, 0, "Service ready");
 	// make the unfo structure ready
 	info.fd = sock;
-	info.end = 0;
 	info.configuration = configuration;
 	info.client_addr = (struct sockaddr_storage *) client_addr;
-	// spawn the control thread
-	if ((pthread_create(&control_thread, NULL,
-		&controlRoutine, &info)) != 0)
-		err(1, "Error while creating thread.");
-	while(!info.end){
-		if (signaled){
-			close(sock);
-			return (0);
-		}
-		sleep(1);
-	}
-		pthread_join(control_thread, NULL);
+	// spawn the control routine
+	ret = controlRoutine(&info);
 	// final cleanup
-	sprintf(msg, "Closed connection with address '%s' on port %d.\n",
+	snprintf(msg, strlen(msg), "Closed connection with address '%s' on port %d.\n",
 		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
 	logReport(msg);
 	close(sock);
-	return (0);
+
+	return (ret);
 }

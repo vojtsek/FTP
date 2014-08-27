@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
+#include <limits.h>
 
 // initialize configuration
 struct config configuration;
@@ -26,6 +27,7 @@ int main(int argc, char **argv) {
 	sigemptyset(&s_action.sa_mask);
 	s_action.sa_handler = sig_handler;
 	s_action.sa_flags = 0;
+	char cwd[PATH_MAX];
 	sigaction(SIGINT, &s_action, NULL);
 
 	readConfiguration(&configuration, argc, argv);
@@ -34,15 +36,15 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Run with root privileges to chroot.\n");
 		exit(1);
 	}
-	if (chdir(ROOT_DIR) == -1) {
-		err(1, "Change root failed.");
+	if(getcwd(cwd, 256) == NULL){
+		err(1, "Failed to get current directory name.");
 	}
-	if (chroot(ROOT_DIR) == -1) {
+	if (chroot(cwd) == -1) {
 		err(1, "Change root failed.");
 	}
 	setgid(UID);
 	if (setuid(UID) == -1) {
-		err(1, "Change root failed.");
+		err(1, "Failed to set to desired UID.");
 	}
 	// create a socket and start listening
 	printf("Starting the server, quit with Ctrl + C\n");
