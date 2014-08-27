@@ -119,7 +119,8 @@ void paswd(char **params, short *abor, int fd,
 	}
 	// wrong password
 	char str[USER_LENGTH];
-	snprintf(str, strlen(str), "User %s failed to login: Wrong password.", cstate->user);
+	snprintf(str, strlen(str),
+		"User %s failed to login: Wrong password.", cstate->user);
 	respond(fd, 4, 0, 0, "Wrong password.");
 }
 
@@ -377,7 +378,8 @@ void port(char **params, short *abor, int fd,
 	respond(fd, 2, 0, 0, "Port changed.");
 }
 
-// sets the communication port and IP adress server should connect to - extended version
+// sets the communication port and IP adress
+// server should connect to - extended version
 void eprt(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	if (params[0] == NULL) {
@@ -405,7 +407,8 @@ void eprt(char **params, short *abor, int fd,
 	buf[n_del - del - 1] = '\0';
 	port = atoi(buf);
 	if (family == 1) { // IPv4
-		struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
+		struct sockaddr_in *in = (struct sockaddr_in *)
+		&(cstate->client_addr);
 		// converts the IP address
 		if (inet_pton(AF_INET, ip_str, &(in->sin_addr)) == -1) {
 			respond(fd, 5, 0, 1, "Invalid address.");
@@ -415,7 +418,8 @@ void eprt(char **params, short *abor, int fd,
 		in->sin_port = htons(port);
 		in->sin_family = AF_INET;
 	} else if (family == 2) { // IPv6
-		struct sockaddr_in6 *in = (struct sockaddr_in6 *) &(cstate->client_addr);
+		struct sockaddr_in6 *in = (struct sockaddr_in6 *)
+		&(cstate->client_addr);
 		// converts the IP address
 		if (inet_pton(AF_INET6, ip_str, &(in->sin6_addr)) == -1) {
 			respond(fd, 5, 0, 1, "Invalid address.");
@@ -512,7 +516,7 @@ void pasv(char **params, short *abor, int fd,
 
 	struct sockaddr_in in;
 	int size = sizeof (in);
-	getsockname(fd, &in, size );
+	getsockname(fd, &in, size);
 	inet_ntop(AF_INET, &in, buf, 64);
 	printf("%s\n", buf);
 	if (cstate->control_sock && cstate->port) {
@@ -581,7 +585,8 @@ void epsv(char **params, short *abor, int fd,
 	}
 	read(cstate->control_sock, &port, sizeof (int));
 	// informs the client
-	snprintf(msg, strlen(msg), "OK, entering extended passive mode (|||%d|).", port);
+	snprintf(msg, strlen(msg),
+		"OK, entering extended passive mode (|||%d|).", port);
 	respond(fd, 2, 2, 9, msg);
 }
 

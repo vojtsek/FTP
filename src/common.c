@@ -240,11 +240,13 @@ short spawnConnection(struct state *cstate, int *accepted) {
 	*accepted = 0;
 
 	if (cstate->addr_family == 1) {
-		struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
+		struct sockaddr_in *in = (struct sockaddr_in *)
+		&(cstate->client_addr);
 		char str[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &(in->sin_addr), str, INET_ADDRSTRLEN);
 		if (!cstate->data_sock) {
-			if ((*accepted = socket(AF_INET, SOCK_STREAM, 6)) == -1) {
+			if ((*accepted = socket(AF_INET,
+				SOCK_STREAM, 6)) == -1) {
 				perror("Error creating data socket.");
 				return (-1);
 			}
@@ -254,17 +256,21 @@ short spawnConnection(struct state *cstate, int *accepted) {
 				return (-1);
 			}
 		} else {
-			if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1) {
-				perror("Error accepting connection on data socket.");
+			if ((*accepted = accept(cstate->data_sock,
+				NULL, 0)) == -1) {
+				perror("Error accepting \
+					connection on data socket.");
 				return (-1);
 			}
 		}
 	} else if (cstate->addr_family == 2) {
-		struct sockaddr_in6 *in = (struct sockaddr_in6 *) &(cstate->client_addr);
+		struct sockaddr_in6 *in = (struct sockaddr_in6 *)
+		&(cstate->client_addr);
 		char str[INET6_ADDRSTRLEN];
 		inet_ntop(AF_INET6, &(in->sin6_addr), str, INET6_ADDRSTRLEN);
 		if (!cstate->data_sock) {
-			if ((*accepted = socket(AF_INET6, SOCK_STREAM, 6)) == -1) {
+			if ((*accepted =
+				socket(AF_INET6, SOCK_STREAM, 6)) == -1) {
 				perror("Error creating data socket.");
 				return (-1);
 			}
@@ -274,8 +280,10 @@ short spawnConnection(struct state *cstate, int *accepted) {
 				return (-1);
 			}
 		} else {
-			if ((*accepted = accept(cstate->data_sock, NULL, 0)) == -1) {
-				perror("Error accepting connection on data socket.");
+			if ((*accepted =
+				accept(cstate->data_sock, NULL, 0)) == -1) {
+				perror("Error accepting\
+					connection on data socket.");
 				return (-1);
 			}
 		}
@@ -405,7 +413,7 @@ int rmrDir(char *dir) {
 	return (0);
 }
 
-void doCleanup(struct config *configuration){
+void doCleanup(struct config *configuration) {
 	free(configuration->listen_on);
 	free(configuration->root_dir);
 	free(configuration->user_db);

@@ -55,8 +55,8 @@ int startServer(struct config *configuration) {
 		err(1, "Problem occured while creating the socket.");
 
 	optval = 0;
-	if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, 
-		               &optval, sizeof (optval)) == -1)
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
+		&optval, sizeof (optval)) == -1)
 		err(1, "Problem occured while creating the socket.");
 
 	// bind the socket with the port
@@ -117,7 +117,8 @@ int runInstance(struct config *configuration,
 	inet_ntop(((struct sockaddr_storage *)client_addr)->ss_family,
 		&(((struct sockaddr_in6 *)client_addr)->sin6_addr.s6_addr),
 		numeric_addr, sizeof (numeric_addr));
-	snprintf(msg, strlen(msg), "Connected peer with address '%s' on port %d.\n",
+	snprintf(msg, strlen(msg),
+		"Connected peer with address '%s' on port %d.\n",
 		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port);
 	logReport(msg);
 	respond(sock, 2, 2, 0, "Service ready");
@@ -128,8 +129,10 @@ int runInstance(struct config *configuration,
 	// spawn the control routine
 	ret = controlRoutine(&info);
 	// final cleanup
-	snprintf(msg, strlen(msg), "Closed connection with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
+	snprintf(msg, strlen(msg),
+		"Closed connection with address '%s' on port %d.\n",
+		numeric_addr, ((struct sockaddr_in6 *)
+			client_addr)->sin6_port);
 	logReport(msg);
 	close(sock);
 

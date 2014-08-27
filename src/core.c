@@ -27,7 +27,7 @@ char readWord(int fd, char *word, size_t max) {
 			break;
 		if (isWhite(c)) break;
 		word[i++] = c;
-		if (i == max){
+		if (i == max) {
 			printf("Word too long.\n");
 			return (0);
 		}
@@ -222,7 +222,7 @@ void *dataRoutine(void *arg) {
 		info->cstate->data_sock = cstate.data_sock;
 		info->cstate->last_accepted = cstate.last_accepted;
 	}
-	if (cstate.data_sock){
+	if (cstate.data_sock) {
 		close(cstate.data_sock);
 	}
 	free(info);
