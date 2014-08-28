@@ -105,7 +105,7 @@ int spawnDataRoutine(struct state *cstate,
 	struct data_info *info = (struct data_info *)
 	allocate(sizeof (struct data_info));
 	char name[32];
-	snprintf(name, strlen(name), "/control_sockets/%scsk%d", cstate->dir,
+	snprintf(name, 32, "/control_sockets/%scsk%d", cstate->dir,
 		cstate->transfer_count);
 	int sck;
 	struct sockaddr_un sa;
@@ -170,7 +170,7 @@ int controlRoutine(struct control_info *info) {
 		.data_thread = 0,
 		.transfer_type = Image,
 		.client_addr = *(info->client_addr) };
-	snprintf(cstate.dir, strlen(cstate.dir), "%d", (int)now);
+	snprintf(cstate.dir, 32, "%d", (int)now);
 	short abor = 0;
 	if (isDir("/control_sockets") == -1)
 		mkdir("/control_sockets", 0755);
@@ -214,7 +214,6 @@ void *dataRoutine(void *arg) {
 		// printf("Data socket: %d\n", cstate.data_sock);
 		readUntil(command.name, sck, 0, 256);
 		if (command.name[0] == 'Q') {
-			printf("Q\n");
 			break;
 		}
 		executeCmd(&command, NULL, sck, &cstate, info->configuration);

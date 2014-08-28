@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
+#include <err.h>
 #include <time.h>
 #define	MAXHOST 256
 
@@ -204,31 +205,21 @@ int getFullPath(char *fpath, struct state *cstate,
 	return (0);
 }
 
-// traverses through differents interfaces' addresses
-// returns foreign address
-int getHostIp(char *ip, struct in_addr *addr) {
-	struct ifaddrs *ifAddrStruct;
-    struct ifaddrs *ifa;
-    void *tmpAddrPtr;
-    char msg[128];
-
-    getifaddrs(&ifAddrStruct);
-
-	for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
-		if (ifa->ifa_addr->sa_family == AF_INET) {
-			tmpAddrPtr =
-			&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
-			inet_ntop(AF_INET, tmpAddrPtr, ip, INET_ADDRSTRLEN);
-			if (strcmp(ip, "127.0.0.1") != 0) {
-				snprintf(msg, strlen(msg), "Using interface %s",
-					ifa->ifa_name);
-				break;
-			}
-		}
+// gets the local IP address the socket with descriptor sock fd is bounded to
+int getHostIp(char *ip, int sockfd) {
+	struct sockaddr_in6 in;
+	socklen_t size = sizeof (in);
+	char buf[STR_LENGTH], *ddots;
+	if (getsockname(sockfd, (struct sockaddr *)&in, &size) == -1) {
+		perror("Error getting host address.");
+		return (-1);
 	}
-	if (ifAddrStruct != NULL) freeifaddrs(ifAddrStruct);
-	else return (-1);
-	*addr = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+	if (inet_ntop(AF_INET6, &(in.sin6_addr), buf, STR_LENGTH) == NULL) {
+		perror("inet_ntop failed to get the local address.");
+		return (-1);
+	}
+	ddots = strrchr(buf, ':');
+	strncpy(ip, ddots + 1, INET_ADDRSTRLEN);
 	return (0);
 }
 
@@ -305,7 +296,6 @@ int im2as(char *dest, char *src, int size) {
 		}
 		dest[j++] = src[i];
 	}
-
 	return (subn);
 }
 
@@ -359,7 +349,7 @@ int listDir(char *dir, char *result) {
 		if ((strcmp(entry->d_name, ".") == 0) ||
 			(strcmp(entry->d_name, "..") == 0))
 			continue;
-		snprintf(path, strlen(path), "%s/%s", dir, entry->d_name);
+		snprintf(path, PATH_LENGTH, "%s/%s", dir, entry->d_name);
 		if (stat(path, finfo))
 			continue;
 		memset(mode, '-', 10);
@@ -378,7 +368,7 @@ int listDir(char *dir, char *result) {
 			continue;
 	    }
 	    tm[12] = 0;
-		snprintf(line, strlen(line), "%s %d %s %s %d %s %s\n", mode, 1,
+		snprintf(line, STR_LENGTH, "%s %d %s %s %d %s %s\n", mode, 1,
 			"FTP", "FTP", (int) finfo->st_size, tm, entry->d_name);
 		strcpy(result, line);
 		result += strlen(line);
@@ -400,7 +390,7 @@ int rmrDir(char *dir) {
 		if ((strcmp(entry->d_name, ".") == 0) ||
 			(strcmp(entry->d_name, "..") == 0))
 			continue;
-		snprintf(abs_fn, strlen(abs_fn), "%s/%s", dir, entry->d_name);
+		snprintf(abs_fn, PATH_LENGTH, "%s/%s", dir, entry->d_name);
 		if ((t = opendir(abs_fn))) {
 			closedir(t);
 			rmrDir(abs_fn);

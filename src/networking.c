@@ -93,15 +93,14 @@ int startServer(struct config *configuration) {
 				close(newsock);
 			break;
 		}
-		// after the loop, so signal was delivered
-		// wait for all children
-		while ((chpid = wait(&status)) > 0);
-		if (signaled) {
-			doCleanup(configuration);
-			return (1);
-		}
 	}
-
+	// after the loop, so signal was delivered
+	// wait for all children
+	while ((chpid = wait(&status)) > 0);
+	if (signaled) {
+		doCleanup(configuration);
+		return (1);
+	}
 	return (0);
 }
 
@@ -109,17 +108,17 @@ int startServer(struct config *configuration) {
 int runInstance(struct config *configuration,
 	struct sockaddr *client_addr, int sock) {
 	char numeric_addr[INET6_ADDRSTRLEN];
-	char msg[128];
+	char msg[STR_LENGTH];
 	int ret = 0;
 	struct control_info info;
 	bzero(numeric_addr, INET6_ADDRSTRLEN);
 
 	inet_ntop(((struct sockaddr_storage *)client_addr)->ss_family,
 		&(((struct sockaddr_in6 *)client_addr)->sin6_addr.s6_addr),
-		numeric_addr, sizeof (numeric_addr));
-	snprintf(msg, strlen(msg),
+		numeric_addr, INET6_ADDRSTRLEN);
+	snprintf(msg, STR_LENGTH,
 		"Connected peer with address '%s' on port %d.\n",
-		numeric_addr, ((struct sockaddr_in *)client_addr)->sin_port);
+		numeric_addr, ((struct sockaddr_in6 *)client_addr)->sin6_port);
 	logReport(msg);
 	respond(sock, 2, 2, 0, "Service ready");
 	// make the unfo structure ready
@@ -129,7 +128,7 @@ int runInstance(struct config *configuration,
 	// spawn the control routine
 	ret = controlRoutine(&info);
 	// final cleanup
-	snprintf(msg, strlen(msg),
+	snprintf(msg, STR_LENGTH,
 		"Closed connection with address '%s' on port %d.\n",
 		numeric_addr, ((struct sockaddr_in6 *)
 			client_addr)->sin6_port);

@@ -21,7 +21,8 @@
 
 // iterate through command functions
 // and assigns the apropriate function to the given command
-void initCmd(struct cmd *command, struct cmd_function all_commands[]) {
+void initCmd(struct cmd *command,
+	const struct cmd_function all_commands[]) {
 	int i;
 	for (i = 0; i < CMD_COUNT; ++i) {
 		if (strcasecmp(command->name, all_commands[i].name) == 0) {
@@ -119,7 +120,7 @@ void paswd(char **params, short *abor, int fd,
 	}
 	// wrong password
 	char str[USER_LENGTH];
-	snprintf(str, strlen(str),
+	snprintf(str, USER_LENGTH,
 		"User %s failed to login: Wrong password.", cstate->user);
 	respond(fd, 4, 0, 0, "Wrong password.");
 }
@@ -200,7 +201,7 @@ void mkd(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	snprintf(response, strlen(response), "Directory %s created.", fpath);
+	snprintf(response, STR_LENGTH, "Directory %s created.", fpath);
 	respond(fd, 2, 5, 7, response);
 }
 
@@ -228,7 +229,7 @@ void rmd(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	snprintf(response, strlen(response), "Directory %s removed.", fpath);
+	snprintf(response, STR_LENGTH, "Directory %s removed.", fpath);
 	respond(fd, 2, 5, 0, response);
 }
 
@@ -256,7 +257,7 @@ void dele(char **params, short *abor, int fd,
 		respond(fd, 4, 5, 1, "Internal server error.");
 		return;
 	}
-	snprintf(response, strlen(response), "File %s removed.", fpath);
+	snprintf(response, STR_LENGTH, "File %s removed.", fpath);
 	respond(fd, 2, 5, 0, response);
 }
 
@@ -303,7 +304,8 @@ void type(char **params, short *abor, int fd,
 void feat(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	respond(fd, 2, 1, 1, "Sorry.");
-	respond(fd, 2, 1, 1, "End.");
+	write(fd, "NONE", 4);
+	respond(fd, 2, 1, 1, "end");
 }
 
 // no operation; only responds
@@ -480,8 +482,9 @@ void list(char **params, short *abor, int fd,
 // sends the listing of the directory - data part
 void d_list(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
-	int accepted, retcode;
-	char buf[BUFSIZE], dir[32], path[128];
+	int accepted, retcode, subn, r;
+	char buf[BUFSIZE], dir[32], path[128], tmp[2 * BUFSIZE];
+
 	// accept connection / connect to the client
 	if (spawnConnection(cstate, &accepted)) {
 		retcode = 5;
@@ -500,8 +503,24 @@ void d_list(char **params, short *abor, int fd,
 	// loads the listing of the directory
 	// determined by path to string pointed to by buf
 	listDir(path, buf);
-	// sends the list
-	write(accepted, buf, strlen(buf));
+	// sends the list in ASCII mode
+	r = strlen(buf);
+	// converts \n to \r\n sequence,
+	// return how much is the result longer
+	if ((subn = im2as(tmp, buf, BUFSIZE)) == -1) {
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(accepted);
+		return;
+	}
+	r += subn;
+	memcpy(buf, tmp, BUFSIZE * 2);
+	if (write(accepted, buf, r) == -1) {
+		retcode = 5;
+		write(fd, &retcode, sizeof (int));
+		close(accepted);
+		return;
+	}
 	close(accepted);
 	// report the result
 	retcode = 2;
@@ -512,13 +531,8 @@ void d_list(char **params, short *abor, int fd,
 void pasv(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	int resp, i = 0;
-	char c, buf[64], msg[128];
+	char c, buf[64], msg[STR_LENGTH];
 
-	struct sockaddr_in in;
-	int size = sizeof (in);
-	getsockname(fd, &in, size);
-	inet_ntop(AF_INET, &in, buf, 64);
-	printf("%s\n", buf);
 	if (cstate->control_sock && cstate->port) {
 		// terminate the spawned thread for active transfer
 		write(cstate->control_sock, "Q\0", 2);
@@ -535,6 +549,7 @@ void pasv(char **params, short *abor, int fd,
 	}
 	// invokes the DPASV command
 	write(cstate->control_sock, "DPASV\0", 6);
+	write(cstate->control_sock, &fd, sizeof (int));
 	read(cstate->control_sock, &resp, sizeof (int));
 	if (resp == 5) {
 		respond(fd, 5, 0, 1, "Internal server error");
@@ -551,14 +566,14 @@ void pasv(char **params, short *abor, int fd,
 			break;
 	}
 	// informs the client
-	snprintf(msg, strlen(msg), "OK, entering passive mode (%s).", buf);
+	snprintf(msg, STR_LENGTH, "OK, entering passive mode (%s).", buf);
 	respond(fd, 2, 2, 7, msg);
 }
 
 void epsv(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	int port = 0;
-	char msg[128];
+	char msg[STR_LENGTH];
 
 	if (cstate->control_sock && cstate->port) {
 		// terminate the spawned thread for active transfer
@@ -585,7 +600,7 @@ void epsv(char **params, short *abor, int fd,
 	}
 	read(cstate->control_sock, &port, sizeof (int));
 	// informs the client
-	snprintf(msg, strlen(msg),
+	snprintf(msg, STR_LENGTH,
 		"OK, entering extended passive mode (|||%d|).", port);
 	respond(fd, 2, 2, 9, msg);
 }
@@ -593,20 +608,20 @@ void epsv(char **params, short *abor, int fd,
 // sets the passive mode - data part
 void d_pasv(char **params, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
-	int newsock, port, retcode, optval = 1;
+	int csockfd, newsock, port, retcode, optval = 1;
 	struct sockaddr_in in;
 	bzero(&in, sizeof (in));
 	char ip[INET_ADDRSTRLEN], msg[STR_LENGTH];
-
 	// default new port
 	port = 30000;
 	in.sin_family = AF_INET;
-	// gets the IP adress tthe OS provides
-	strcpy(ip, configuration->listen_on + 7);
+	// gets the IP adress the OS provides
+	read(fd, &csockfd, sizeof (int));
+	if (getHostIp(ip, csockfd) == -1)
+		return;
 	if (inet_pton(AF_INET, ip, &(in.sin_addr)) == -1) {
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
-		close(newsock);
 		return;
 	}
 	in.sin_port = htons(port);
@@ -621,7 +636,6 @@ void d_pasv(char **params, short *abor, int fd,
 		perror("Error creating data socket.");
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
-		close(newsock);
 		return;
 	}
 	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
@@ -656,7 +670,7 @@ void d_pasv(char **params, short *abor, int fd,
 		return;
 	}
 	// writes info about new IP address and socket to the control thread
-	snprintf(msg, strlen(msg), "%s,%d,%d", ip, (port / 256), (port % 256));
+	snprintf(msg, STR_LENGTH, "%s,%d,%d", ip, (port / 256), (port % 256));
 	retcode = 2;
 	write(fd, &retcode, sizeof (int));
 	write(fd, msg, strlen(msg) + 1);
@@ -679,7 +693,6 @@ void d_epsv(char **params, short *abor, int fd,
 	if (inet_pton(AF_INET6, ip, &(in.sin6_addr)) == -1) {
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
-		close(newsock);
 		return;
 	}
 	// in.sin6_addr = in6addr_any;
@@ -694,7 +707,6 @@ void d_epsv(char **params, short *abor, int fd,
 		perror("Error creating data socket.");
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
-		close(newsock);
 		return;
 	}
 	if (setsockopt(newsock, SOL_SOCKET, SO_REUSEADDR,
@@ -789,7 +801,6 @@ void d_retr(char **params, short *abor, int fd,
 	char filepath[PATH_LENGTH], buf[2 * BUFSIZE];
 	// accepts / connects to the client
 	if (spawnConnection(cstate, &accepted)) {
-		REP("AA");
 		retcode = 5;
 		write(fd, &retcode, sizeof (int));
 		return;

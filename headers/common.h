@@ -26,7 +26,7 @@ short isFileOk(char *);
 int lookupUser(char *, char *, char *, size_t max);
 int readUntil(char*, int, char, size_t max);
 int getFullPath(char *, struct state *, struct config *, char *);
-int getHostIp(char *, struct in_addr *);
+int getHostIp(char *, int);
 int im2as(char *, char *, int);
 int as2im(char *, char *, int);
 short spawnConnection(struct state *, int *);

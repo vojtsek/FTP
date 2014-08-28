@@ -6,7 +6,8 @@
 #include "structures.h"
 
 
-void initCmd(struct cmd *, struct cmd_function all_commands[]);
+void initCmd(struct cmd *,
+	const struct cmd_function all_commands[]);
 int respond(int, int, int, int, char *);
 void user(char **, short *, int, struct state *, struct config *);
 void paswd(char **, short *, int, struct state *, struct config *);
@@ -38,7 +39,7 @@ void d_epsv(char **, short *, int, struct state *, struct config *);
 void quit(char **, short *, int, struct state *, struct config *);
 
 
-static struct cmd_function all_commands[CMD_COUNT] = {
+static const struct cmd_function all_commands[CMD_COUNT] = {
 
 {&quit, "QUIT"},
 {&paswd, "PASS"},

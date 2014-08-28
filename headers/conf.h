@@ -4,7 +4,7 @@
 #define	CTRL_PORT 1038
 #define	DATA_PORT 20
 #define	MAX_CONNS 10
-#define	LISTEN_ON "::ffff:127.0.0.1"
+#define	LISTEN_ON "::ffff:192.168.10.118"
 #define	USER_DB "/users.db"
 #define DATA_DIR "/DATA"
 #define	MAX_CMD_PARAMS 15
