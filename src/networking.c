@@ -30,20 +30,6 @@ int startServer(struct config *configuration) {
 	in6.sin6_family = AF_INET6;
 	in6.sin6_port = htons(configuration->ctrl_port);
 	bzero(&in6.sin6_addr.s6_addr, 16);
-	// open main listening stream socket, IPv6, TCP
-	// struct sockaddr_in in;
-	// psize = sizeof (struct sockaddr);
-	// struct sockaddr *peer_addr = (struct sockaddr *) allocate(psize);
-	// bzero(&in, sizeof (in));
-
-	// initialize option
-	// bzero(peer_addr, psize);
-	// in.sin_family = AF_INET;
-	// in.sin_port = htons(configuration->ctrl_port);
-	if (inet_pton(AF_INET6, configuration->listen_on,
-		&(in6.sin6_addr)) == -1)
-		err(1, "Problem occured while creating the socket.");
-	bzero(&in6.sin6_addr.s6_addr, 16);
 	in6.sin6_addr.s6_addr[0] = 0;
 	// open main listening stream socket, IPv6, TCP
 	if ((sock = socket(AF_INET6, SOCK_STREAM, 6)) == -1)

@@ -114,14 +114,16 @@ int spawnDataRoutine(struct state *cstate,
 	// creates and starts listen on the socket
 	// for communicating between the control and data thread
 	unlink(name);
+	errno = 0;
 	bzero(&sa, sizeof (sa));
 	strncpy(sa.sun_path, name, sizeof (sa.sun_path));
+	socklen_t un_size = offsetof(struct sockaddr_un, sun_path) + strlen(sa.sun_path) + 1;
 	sa.sun_family = AF_UNIX;
 	if ((sck = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating control socket.");
 		return (-1);
 	}
-	if (bind(sck, (struct sockaddr *) &sa, sizeof (sa)) == -1) {
+	if (bind(sck, (struct sockaddr *) &sa, un_size) == -1) {
 		perror("Error binding control socket.");
 		return (-1);
 	}

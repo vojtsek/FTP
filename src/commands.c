@@ -683,19 +683,12 @@ void d_epsv(char **params, short *abor, int fd,
 	int newsock, port, retcode, optval = 1;
 	struct sockaddr_in6 in;
 	bzero(&in, sizeof (in));
-	char ip[INET6_ADDRSTRLEN];
 
 	// default new port
 	port = 30000;
 	in.sin6_family = AF_INET6;
-	// gets the IP adress the OS provides
-	strcpy(ip, configuration->listen_on);
-	if (inet_pton(AF_INET6, ip, &(in.sin6_addr)) == -1) {
-		retcode = 5;
-		write(fd, &retcode, sizeof (int));
-		return;
-	}
-	// in.sin6_addr = in6addr_any;
+	// listens on wildcard socket, suitable for IPv6
+	bzero(&in.sin6_addr.s6_addr, 16);
 	in.sin6_port = htons(port);
 	// server already listens - abort
 	if (cstate->data_sock) {
