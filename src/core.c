@@ -72,6 +72,7 @@ int readCmd(int fd, struct cmd *command) {
 		// read another parameter
 		command->params[i] = (char *) allocate(256 * sizeof (char));
 		if ((r = readWord(fd, command->params[i], 256)) == 0) {
+			command->params[i+1] = NULL;
 			freeCmd(command);
 			return (-1);
 		}
@@ -87,7 +88,8 @@ int readCmd(int fd, struct cmd *command) {
 int executeCmd(struct cmd *command, short *abor, int fd,
 	struct state *cstate, struct config *configuration) {
 	// loads the pointer to the apropriate function
-	initCmd(command, all_commands);
+	initCmd(command, all_commands,
+		(sizeof (all_commands) / sizeof (all_commands[0])));
 	// calls it
 	if (command->func)
 		command->func(command->params, abor, fd, cstate, configuration);
@@ -102,8 +104,7 @@ int executeCmd(struct cmd *command, short *abor, int fd,
 // spwans the thread to control the data connection
 int spawnDataRoutine(struct state *cstate,
 	struct config *configuration, int *sock) {
-	struct data_info *info = (struct data_info *)
-	allocate(sizeof (struct data_info));
+	struct data_info *info;
 	char name[32];
 	snprintf(name, 32, "/control_sockets/%scsk%d", cstate->dir,
 		cstate->transfer_count);
@@ -111,13 +112,17 @@ int spawnDataRoutine(struct state *cstate,
 	struct sockaddr_un sa;
 	pthread_t data_thread;
 
+	info = (struct data_info *)
+		allocate(sizeof (struct data_info));
+
 	// creates and starts listen on the socket
 	// for communicating between the control and data thread
 	unlink(name);
 	errno = 0;
 	bzero(&sa, sizeof (sa));
 	strncpy(sa.sun_path, name, sizeof (sa.sun_path));
-	socklen_t un_size = offsetof(struct sockaddr_un, sun_path) + strlen(sa.sun_path) + 1;
+	socklen_t un_size = offsetof(struct sockaddr_un, sun_path) +
+	strlen(sa.sun_path) + 1;
 	sa.sun_family = AF_UNIX;
 	if ((sck = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating control socket.");
@@ -175,7 +180,10 @@ int controlRoutine(struct control_info *info) {
 	snprintf(cstate.dir, 32, "%d", (int)now);
 	short abor = 0;
 	if (isDir("/control_sockets") == -1)
-		mkdir("/control_sockets", 0755);
+		if (mkdir("/control_sockets", 0755) == -1) {
+			perror("Failed to create control_sockets directory.");
+			return (-1);
+		}
 	// reads commands from the accepted connection and executes it
 	while (readCmd(fd, &command) != -1) {
 		executeCmd(&command, &abor, fd, &cstate, info->configuration);

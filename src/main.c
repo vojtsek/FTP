@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Run with root privileges to chroot.\n");
 		exit(1);
 	}
-	if (getcwd(cwd, 256) == NULL) {
+	if (getcwd(cwd, PATH_MAX) == NULL) {
 		err(1, "Failed to get current directory name.");
 	}
 	if (chroot(cwd) == -1) {

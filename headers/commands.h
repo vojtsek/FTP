@@ -2,12 +2,11 @@
 #define	COMMANDS_H
 
 #define BUFSIZE 2048
-#define CMD_COUNT 26
 #include "structures.h"
 
 
 void initCmd(struct cmd *,
-	const struct cmd_function all_commands[]);
+	const struct cmd_function all_commands[], int cmd_length);
 int respond(int, int, int, int, char *);
 void user(char **, short *, int, struct state *, struct config *);
 void paswd(char **, short *, int, struct state *, struct config *);
@@ -39,7 +38,7 @@ void d_epsv(char **, short *, int, struct state *, struct config *);
 void quit(char **, short *, int, struct state *, struct config *);
 
 
-static const struct cmd_function all_commands[CMD_COUNT] = {
+static const struct cmd_function all_commands[] = {
 
 {&quit, "QUIT"},
 {&paswd, "PASS"},

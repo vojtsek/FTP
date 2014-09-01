@@ -31,12 +31,10 @@ void readConfiguration(struct config *configuration, int argc, char **argv) {
 	configuration->ctrl_port = CTRL_PORT;
 	configuration->data_port = DATA_PORT;
 	configuration->max_conns = MAX_CONNS;
-	configuration->listen_on = (char *) allocate(256);
-	configuration->root_dir = (char *) allocate(256);
-	configuration->user_db = (char *) allocate(256);
-	strcpy(configuration->listen_on, LISTEN_ON);
-	strcpy(configuration->root_dir, DATA_DIR);
-	strcpy(configuration->user_db, USER_DB);
+	configuration->root_dir = (char *) allocate(PATH_LENGTH);
+	configuration->user_db = (char *) allocate(PATH_LENGTH);
+	strncpy(configuration->root_dir, DATA_DIR, PATH_LENGTH);
+	strncpy(configuration->user_db, USER_DB, PATH_LENGTH);
 
 	// process optional parametres
 	while ((opt = getopt(argc, argv, "c:d:r:f:")) != -1) {
@@ -92,7 +90,7 @@ char *changeDir(char *path, char *dir) {
 	}
 	// the given path is absolute
 	if (dir[0] == '/') {
-		if (strcpy(path, dir) == NULL) {
+		if (strncpy(path, dir, PATH_LENGTH - 1) == NULL) {
 			return (NULL);
 		}
 		return (path);
@@ -103,7 +101,7 @@ char *changeDir(char *path, char *dir) {
 		return (NULL);
 	path[path_l] = '/';
 	path[path_l + 1] = 0;
-	strcat(path, dir);
+	strncat(path, dir, PATH_LENGTH - 1);
 
 	return (path);
 }
@@ -188,17 +186,20 @@ int getFullPath(char *fpath, struct state *cstate,
 	// the name is determined by absolute path
 	// only joins root
 	if (dirname[0] == '/') {
-		if (strcpy(fpath, configuration->root_dir) == NULL)
+		if (strncpy(fpath, configuration->root_dir,
+			PATH_LENGTH - 1) == NULL)
 			return (-1);
-		if (strcat(fpath, dirname) == NULL)
+		fpath[PATH_LENGTH - 1] = '\0';
+		if (strncat(fpath, dirname, PATH_LENGTH - 1) == NULL)
 			return (-1);
 		return (0);
 	}
 	// relative path
 	// joins root, cwd and dirname
-	if (strcpy(fpath, configuration->root_dir) == NULL)
+	if (strncpy(fpath, configuration->root_dir, PATH_LENGTH - 1) == NULL)
 		return (-1);
-	if (strcat(fpath, cstate->path) == NULL)
+	fpath[PATH_LENGTH - 1] = '\0';
+	if (strncat(fpath, cstate->path, PATH_LENGTH - 1) == NULL)
 		return (-1);
 	if ((fpath = changeDir(fpath, dirname)) == NULL)
 		return (-1);
@@ -370,7 +371,8 @@ int listDir(char *dir, char *result) {
 	    tm[12] = 0;
 		snprintf(line, STR_LENGTH, "%s %d %s %s %d %s %s\n", mode, 1,
 			"FTP", "FTP", (int) finfo->st_size, tm, entry->d_name);
-		strcpy(result, line);
+		strncpy(result, line, STR_LENGTH - 1);
+		result[STR_LENGTH - 1] = '\0';
 		result += strlen(line);
 	}
 	if (closedir(d))
@@ -404,7 +406,6 @@ int rmrDir(char *dir) {
 }
 
 void doCleanup(struct config *configuration) {
-	free(configuration->listen_on);
 	free(configuration->root_dir);
 	free(configuration->user_db);
 	rmrDir("/control_sockets");

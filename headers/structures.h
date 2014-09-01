@@ -9,7 +9,7 @@ typedef enum {ASCII, Image} transfer_t;
 
 struct config {
 	size_t ctrl_port, data_port, max_conns;
-	char *listen_on, *root_dir, *user_db;
+	char *root_dir, *user_db;
 };
 
 struct state {

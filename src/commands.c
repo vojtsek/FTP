@@ -22,9 +22,9 @@
 // iterate through command functions
 // and assigns the apropriate function to the given command
 void initCmd(struct cmd *command,
-	const struct cmd_function all_commands[]) {
+	const struct cmd_function all_commands[], int cmd_length) {
 	int i;
-	for (i = 0; i < CMD_COUNT; ++i) {
+	for (i = 0; i < cmd_length; ++i) {
 		if (strcasecmp(command->name, all_commands[i].name) == 0) {
 			command->func = all_commands[i].func;
 			break;
@@ -114,7 +114,6 @@ void paswd(char **params, short *abor, int fd,
 	// password is OK
 	if (strcmp(params[0], correct_passwd) == 0) {
 		respond(fd, 2, 3, 0, "User logged in.");
-		changeDir(configuration->root_dir, cstate->user);
 		cstate->logged = 1;
 		return;
 	}
@@ -158,7 +157,8 @@ void cwd(char **params, short *abor, int fd,
 
 	char old_path[PATH_LENGTH];
 	char dir[PATH_LENGTH];
-	strcpy(old_path, cstate->path);
+	strncpy(old_path, cstate->path, PATH_LENGTH - 1);
+	old_path[PATH_LENGTH - 1] = '\0';
 	// loads the full path to the given directory into dir variable
 	if (getFullPath(dir, cstate, configuration, params[0]) == -1) {
 		respond(fd, 4, 5, 1, "Internal server error.");
@@ -339,10 +339,10 @@ void port(char **params, short *abor, int fd,
 	char port_str[STR_LENGTH];
 	char port_upper[4];
 	char port_lower[4];
-	char *comma, *port_st;
+	char *comma, *port_st = NULL;
 	struct sockaddr_in *in = (struct sockaddr_in *) &(cstate->client_addr);
 	bzero(&(cstate->client_addr), sizeof (cstate->client_addr));
-	int size, port_no, pts = 0;
+	int port_no, pts = 0, size = 0;
 
 	// converts the commas in the given address to dots
 	while ((comma = strchr(params[0], ',')) != NULL) {
@@ -354,6 +354,10 @@ void port(char **params, short *abor, int fd,
 			break;
 		}
 		*comma = '.';
+	}
+	if ((!size) || (port_st == NULL)) {
+		respond(fd, 5, 0, 1, "Invalid data supplied.");
+		return;
 	}
 	// copies the IP address and port
 	strncpy(ip_str, params[0], size);
