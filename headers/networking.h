@@ -7,5 +7,6 @@
 int signaled;
 int startServer(struct config *);
 int runInstance(struct config *, struct sockaddr *, int);
+void *join_routine(void *);
 
 #endif

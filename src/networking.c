@@ -15,11 +15,18 @@
 #include <errno.h>
 #include <wait.h>
 
+void *join_routine(void *info) {
+	int status;
+	wait(&status);
+	return (info);
+}
+
 // initiate the server to the listening state
 int startServer(struct config *configuration) {
 	size_t sock, newsock, psize, optval = 1;
 	pid_t pid, chpid;
 	int status;
+	pthread_t thr;
 	struct sockaddr_in6 in6;
 	psize = sizeof (struct sockaddr);
 	struct sockaddr peer_addr;
@@ -76,6 +83,8 @@ int startServer(struct config *configuration) {
 			break;
 			// parent
 			default:
+				pthread_create(&thr, NULL, &join_routine, NULL);
+				pthread_detach(thr);
 				close(newsock);
 			break;
 		}
