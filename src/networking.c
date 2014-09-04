@@ -23,12 +23,12 @@ void *join_routine(void *info) {
 
 // initiate the server to the listening state
 int startServer(struct config *configuration) {
-	size_t sock, newsock, psize, optval = 1;
+	size_t sock, newsock, optval = 1;
 	pid_t pid, chpid;
 	int status;
 	pthread_t thr;
 	struct sockaddr_in6 in6;
-	psize = sizeof (struct sockaddr);
+	socklen_t psize = sizeof (struct sockaddr);
 	struct sockaddr peer_addr;
 	bzero(&in6, sizeof (in6));
 

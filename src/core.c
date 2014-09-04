@@ -106,8 +106,8 @@ int spawnDataRoutine(struct state *cstate,
 	struct config *configuration, int *sock) {
 	struct data_info *info;
 	char name[32];
-	snprintf(name, 32, "/control_sockets/%scsk%d", cstate->dir,
-		cstate->transfer_count);
+	snprintf(name, 32, "/control_sockets/%scsk%lu", cstate->dir,
+		(unsigned long) cstate->transfer_count);
 	int sck;
 	struct sockaddr_un sa;
 	pthread_t data_thread;

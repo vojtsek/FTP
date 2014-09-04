@@ -24,7 +24,8 @@ struct state {
 	struct sockaddr_storage client_addr;
 };
 
-typedef void (*cmd_fnc) (char **, short *, int, struct state*, struct config *);
+typedef void (*cmd_fnc) (char **, short *, int,
+	struct state *, struct config *);
 
 struct cmd {
 	char name[256];

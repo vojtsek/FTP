@@ -8,9 +8,7 @@ HEADER_DIR=headers/
 all: $(BIN_DIR)run
 
 clean:
-	rm $(BIN_DIR)*.o
-	rm $(BIN_DIR)run
-	rmdir $(BIN_DIR)
+	@[ -d $(BIN_DIR) ] && echo "Cleaning." && rm -rf $(BIN_DIR) || echo "Nothing to clean."
 
 define make_obj
 	$(CC) $(CFLAGS) -o $(BIN_DIR)$(1).o -c $(SRC_DIR)$(1).c

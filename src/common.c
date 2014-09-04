@@ -57,10 +57,11 @@ void readConfiguration(struct config *configuration, int argc, char **argv) {
 
 void printConfiguration(struct config *configuration) {
 	printf("using configuration:\n\
-data port: %d\n\
-control port: %d\n\
+data port: %lu\n\
+control port: %lu\n\
 data directory: %s\n",
-configuration->data_port, configuration->ctrl_port,
+(unsigned long) configuration->data_port,
+(unsigned long) configuration->ctrl_port,
 configuration->root_dir);
 }
 

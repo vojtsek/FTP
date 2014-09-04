@@ -1,7 +1,7 @@
 #ifndef COMMANDS_H
 #define	COMMANDS_H
 
-#define BUFSIZE 2048
+#define	BUFSIZE 2048
 #include "structures.h"
 
 
